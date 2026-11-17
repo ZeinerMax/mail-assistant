@@ -4,6 +4,8 @@ A private desktop app (macOS + Windows) that reads up to a few Gmail accounts **
 
 **It never sends, deletes or changes email or calendar events.** You copy a draft and paste it into Gmail yourself.
 
+How the app was designed and built (process, decisions, Google Cloud setup, problems solved): see [HOW_IT_WAS_BUILT.md](HOW_IT_WAS_BUILT.md).
+
 | | |
 |---|---|
 | Stack | Electron 45 · React 19 · TypeScript · electron-vite · better-sqlite3 · electron-builder |
