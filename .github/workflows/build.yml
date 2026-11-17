@@ -1,0 +1,51 @@
+name: Build installers
+
+# Builds unsigned installers for macOS (arm64 + x64 .dmg, ad-hoc signed) and Windows (.exe).
+# No paid code signing. Download them from the run's "Artifacts" section.
+# Manual only (Actions → Build installers → Run workflow): this repo is public, so artifacts are
+# downloadable by any GitHub user and contain the Google client ID/secret. They expire after 14 days.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build installers
+        run: npm run dist
+        env:
+          # Google OAuth "Desktop app" client. Add these in GitHub → Settings → Secrets and variables → Actions.
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          # Never try to find a signing certificate or publish.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: mail-assistant-${{ matrix.os }}
+          path: |
+            release/*.dmg
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 14

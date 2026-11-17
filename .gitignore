@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+release/
+.superpowers/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+secrets.bin
+settings.json
+*.log
+.DS_Store
+.eslintcache

@@ -1,0 +1,45 @@
+appId: com.family.mailassistant
+productName: Mail Assistant
+directories:
+  buildResources: build
+  output: release
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!test/*'
+  - '!scripts/*'
+  - '!docs/*'
+  - '!.superpowers/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!vitest.config.*'
+  - '!{.env,.env.*,.npmrc}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{README.md,CHANGELOG.md}'
+# better-sqlite3 13 ships Node-API prebuilds for every platform, so no native rebuild is needed.
+npmRebuild: false
+asarUnpack:
+  - resources/**
+  - '**/*.node'
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  executableName: Mail Assistant
+nsis:
+  artifactName: Mail-Assistant-${version}-Setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  # No paid Apple certificate: ad-hoc signature ("-") so Apple Silicon will launch it.
+  # Per electron-builder docs, ad-hoc signing needs hardenedRuntime: false.
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
+dmg:
+  artifactName: Mail-Assistant-${version}-${arch}.${ext}
+publish: null
