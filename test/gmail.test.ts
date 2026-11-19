@@ -85,6 +85,15 @@ describe('listNewMessageIds', () => {
     expect(r.ids).toEqual(['a', 'b'])
   })
 
+  it('sinceMs → searches from that time even when a history cursor exists', async () => {
+    const since = NOW - 3 * 24 * 3600_000
+    const { g, calls } = fake({ listPages: [{ messages: [{ id: 'b' }, { id: 'a' }] }], profileHistoryId: '700' })
+    const r = await listNewMessageIds(g, { historyId: '100', lastCheckedAt: NOW }, NOW, since)
+    expect(calls.history).toHaveLength(0)
+    expect(calls.list[0].q).toBe(`in:inbox after:${Math.floor(since / 1000)}`)
+    expect(r).toEqual({ ids: ['a', 'b'], newHistoryId: '700' })
+  })
+
   it('non-404 history errors propagate', async () => {
     const g = fake({}).g
     g.users.history.list = async () => {

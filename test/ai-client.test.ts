@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
-import { testApiKey, createAnthropic } from '../src/main/ai/client'
+import { testApiKey, createAnthropic, cleanApiKey } from '../src/main/ai/client'
 
 const fakeClient = (impl: () => Promise<unknown>): Anthropic =>
   ({ messages: { create: impl } }) as unknown as Anthropic
 
 describe('anthropic client helpers', () => {
+  it('cleanApiKey drops a pasted terminal prompt, nbsp, zero-width and line breaks', () => {
+    expect(cleanApiKey('\u276f\u00a0sk-ant-api03-AbC_12-x\u200b\r\n ')).toBe('sk-ant-api03-AbC_12-x')
+  })
+
+  it('createAnthropic sends a cleaned key', () => {
+    expect(createAnthropic('\u276f\u00a0sk-ant-abc\n').apiKey).toBe('sk-ant-abc')
+  })
+
   it('createAnthropic uses maxRetries 1', () => {
     const c = createAnthropic('sk-ant-test')
     expect(c.maxRetries).toBe(1)

@@ -79,14 +79,19 @@ const empty = (status: RunResult['status']): RunResult => ({
   reloginAccounts: []
 })
 
+export interface RunOptions {
+  /** Check all inbox mail received since this time (ms) instead of only mail new since the last check. */
+  sinceMs?: number
+}
+
 export function createScanner(deps: ScanDeps): {
-  run(): Promise<RunResult>
+  run(opts?: RunOptions): Promise<RunResult>
   draftOne(emailId: number): Promise<'ok' | 'exists' | 'busy' | 'no_api_key' | 'not_found' | 'failed'>
   isRunning(): boolean
 } {
   let running = false
 
-  async function runInner(): Promise<RunResult> {
+  async function runInner(opts: RunOptions = {}): Promise<RunResult> {
     const { repo, settings, emit, now } = deps
     if (!deps.ai) return empty('no_api_key')
     const ai = deps.ai
@@ -115,7 +120,12 @@ export function createScanner(deps: ScanDeps): {
       let listing: { ids: string[]; newHistoryId: string }
       try {
         gmail = await deps.getGmail(acc.id)
-        listing = await listNewMessageIds(gmail, { historyId: acc.lastHistoryId, lastCheckedAt: acc.lastCheckedAt }, now())
+        listing = await listNewMessageIds(
+          gmail,
+          { historyId: acc.lastHistoryId, lastCheckedAt: acc.lastCheckedAt },
+          now(),
+          opts.sinceMs
+        )
       } catch (e) {
         if (isNetworkError(e)) throw new AccountOffline()
         throw e
@@ -306,11 +316,11 @@ export function createScanner(deps: ScanDeps): {
   return {
     draftOne,
     isRunning: () => running,
-    async run() {
+    async run(opts?: RunOptions) {
       if (running) return empty('already_running')
       running = true
       try {
-        return await runInner()
+        return await runInner(opts)
       } finally {
         running = false
       }

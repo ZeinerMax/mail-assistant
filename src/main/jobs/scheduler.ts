@@ -1,7 +1,7 @@
 import { log, redactError } from '../log'
 
-export interface SchedulerDeps<R> {
-  run: () => Promise<R>
+export interface SchedulerDeps<R, O = undefined> {
+  run: (opts?: O) => Promise<R>
   intervalMin: () => number
   now: () => number
   setTimer: (fn: () => void, ms: number) => unknown
@@ -9,7 +9,7 @@ export interface SchedulerDeps<R> {
 }
 
 /** Runs once at start, then every intervalMin minutes. runNow() restarts the interval. Never overlaps (the scanner has its own lock). */
-export function createScheduler<R>(deps: SchedulerDeps<R>) {
+export function createScheduler<R, O = undefined>(deps: SchedulerDeps<R, O>) {
   let timer: unknown = null
   let next: number | null = null
 
@@ -23,10 +23,10 @@ export function createScheduler<R>(deps: SchedulerDeps<R>) {
     }, ms)
   }
 
-  async function tick(): Promise<R | undefined> {
+  async function tick(opts?: O): Promise<R | undefined> {
     schedule()
     try {
-      return await deps.run()
+      return await deps.run(opts)
     } catch (e) {
       log.error('scheduled_run_failed', redactError(e))
       return undefined
@@ -46,7 +46,7 @@ export function createScheduler<R>(deps: SchedulerDeps<R>) {
     reschedule(): void {
       if (next !== null) schedule()
     },
-    runNow: (): Promise<R | undefined> => tick(),
+    runNow: (opts?: O): Promise<R | undefined> => tick(opts),
     nextRunAt: (): number | null => next
   }
 }

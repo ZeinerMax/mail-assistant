@@ -34,7 +34,7 @@ const api: Api = {
     create: (emailId) => inv(CH.draftsCreate, emailId)
   },
   usage: { summary: () => inv(CH.usageSummary) },
-  scan: { runNow: () => inv(CH.scanRunNow) },
+  scan: { runNow: (sinceMs) => inv(CH.scanRunNow, sinceMs) },
   calendar: { events: (s, e) => inv(CH.calendarEvents, s, e) },
   onStatus: on(CH.evStatus),
   onBadge: on(CH.evBadge),

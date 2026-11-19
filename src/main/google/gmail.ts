@@ -77,15 +77,19 @@ async function viaSearch(g: GmailLike, afterMs: number): Promise<string[]> {
  * New inbox message ids since the cursor, oldest first, de-duplicated.
  * history.list is cheap and exact; if the cursor is too old Gmail answers 404 and we fall back to search.
  * First run (no cursor) covers the last 24 hours.
+ * With `sinceMs` (user picked a start time) the cursor is ignored and all inbox mail since then is listed.
  */
 export async function listNewMessageIds(
   g: GmailLike,
   cursor: { historyId: string | null; lastCheckedAt: number | null },
-  now: number
+  now: number,
+  sinceMs?: number
 ): Promise<{ ids: string[]; newHistoryId: string }> {
   const profile = await g.users.getProfile({ userId: 'me' })
   let ids: string[]
-  if (cursor.historyId) {
+  if (sinceMs !== undefined) {
+    ids = await viaSearch(g, sinceMs)
+  } else if (cursor.historyId) {
     try {
       ids = await viaHistory(g, cursor.historyId)
     } catch (e) {

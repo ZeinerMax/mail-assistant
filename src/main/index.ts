@@ -15,7 +15,7 @@ import { loadSettings } from './config'
 import { createAnthropic } from './ai/client'
 import { triage } from './ai/triage'
 import { buildDraftContext, draftReply } from './ai/draft'
-import { createScanner, type AiPort, type RunResult } from './jobs/scan'
+import { createScanner, type AiPort, type RunOptions, type RunResult } from './jobs/scan'
 import { createScheduler } from './jobs/scheduler'
 import { notifyDraftsReady } from './notify'
 import { finalStatus } from './views'
@@ -145,9 +145,9 @@ app.whenReady().then(() => {
       ? { status: r.status, stopReason: r.stopReason, triaged: r.triaged, drafted: r.drafted }
       : { status: 'done', stopReason: 'error', triaged: 0, drafted: 0 }
 
-  const scheduler = createScheduler({
-    run: async () => {
-      const r = await scanner.run()
+  const scheduler = createScheduler<RunResult, RunOptions>({
+    run: async (opts) => {
+      const r = await scanner.run(opts)
       if (r.status === 'done') emitStatus(win, finalStatus(r, Date.now(), scheduler.nextRunAt()))
       else if (r.status === 'no_api_key')
         emitStatus(win, { phase: 'idle', message: 'Add your Anthropic API key in Settings to start' })
@@ -168,9 +168,9 @@ app.whenReady().then(() => {
     secrets,
     accounts,
     getWindow: win.getWindow,
-    runNow: async () => {
+    runNow: async (sinceMs) => {
       if (scanner.isRunning()) return { status: 'already_running', stopReason: 'done', triaged: 0, drafted: 0 }
-      return toView(await scheduler.runNow())
+      return toView(await scheduler.runNow(sinceMs !== undefined ? { sinceMs } : undefined))
     },
     draftOne: (emailId) => scanner.draftOne(emailId),
     onSettingsChanged: () => scheduler.reschedule(),

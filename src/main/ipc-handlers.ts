@@ -6,7 +6,7 @@ import { loadSettings, saveSettings, SettingsError } from './config'
 import type { Repo } from './db/repo'
 import type { SecretStore } from './secrets'
 import { SecretStorageUnavailable } from './secrets'
-import { createAnthropic, testApiKey } from './ai/client'
+import { cleanApiKey, createAnthropic, testApiKey } from './ai/client'
 import { log, redactError } from './log'
 import type { AccountService } from './google/accounts'
 import { MissingGoogleCredentials } from './google/oauth'
@@ -19,8 +19,8 @@ export interface AppContext {
   secrets: SecretStore
   accounts: AccountService<OAuth2Client>
   getWindow: () => BrowserWindow | null
-  /** Runs a full check now (through the scheduler, so the interval restarts). */
-  runNow: () => Promise<RunResultView>
+  /** Runs a full check now (through the scheduler, so the interval restarts). sinceMs: check all mail since then. */
+  runNow: (sinceMs?: number) => Promise<RunResultView>
   draftOne: (emailId: number) => Promise<string>
   onSettingsChanged: () => void
   writeClipboard: (text: string) => void
@@ -83,8 +83,9 @@ export function registerIpc(ctx: AppContext): void {
   )
   ipcMain.handle(CH.apiKeySet, (_e, key: string): Promise<Result<{ last4: string }>> =>
     wrap(() => {
-      const k = typeof key === 'string' ? key.trim() : ''
-      if (k.length < 20) throw new SettingsError('API key', 'that does not look like an Anthropic API key')
+      const k = typeof key === 'string' ? cleanApiKey(key) : ''
+      if (k.length < 20 || !k.startsWith('sk-ant-'))
+        throw new SettingsError('API key', 'that does not look like an Anthropic API key (it starts with sk-ant-)')
       ctx.secrets.set(ANTHROPIC_KEY, k)
       return { last4: k.slice(-4) }
     })
@@ -164,7 +165,12 @@ export function registerIpc(ctx: AppContext): void {
   )
 
   // ---- scan + usage
-  ipcMain.handle(CH.scanRunNow, () => ctx.runNow())
+  ipcMain.handle(CH.scanRunNow, (_e, sinceMs?: unknown) => {
+    if (sinceMs === undefined || sinceMs === null) return ctx.runNow()
+    if (typeof sinceMs !== 'number' || !Number.isFinite(sinceMs) || sinceMs <= 0 || sinceMs > Date.now())
+      return { status: 'done', stopReason: 'bad_time', triaged: 0, drafted: 0 }
+    return ctx.runNow(sinceMs)
+  })
   ipcMain.handle(
     CH.usageSummary,
     (): UsageSummary => ({

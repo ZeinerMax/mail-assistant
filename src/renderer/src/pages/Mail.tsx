@@ -12,6 +12,16 @@ const TAG_LABEL: Record<Tag, string> = {
 
 type Filter = Tag | 'all'
 
+const pad = (n: number): string => String(n).padStart(2, '0')
+/** Local time as the value of <input type="datetime-local" step="1"> (YYYY-MM-DDTHH:MM:SS). */
+const toLocalInput = (d: Date): string =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+const startOfToday = (): string => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return toLocalInput(d)
+}
+
 export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.JSX.Element {
   const [items, setItems] = useState<MailItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -19,6 +29,7 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
   const [acct, setAcct] = useState<number | 0>(0)
   const [checking, setChecking] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [since, setSince] = useState<string>(startOfToday)
 
   const load = useCallback(async () => {
     const [m, a] = await Promise.all([window.api.mail.list({}), window.api.accounts.list()])
@@ -50,15 +61,31 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
     await load()
   }
 
-  const checkNow = async (): Promise<void> => {
+  const check = async (sinceMs?: number): Promise<void> => {
     setChecking(true)
     setNote(null)
-    const r = await window.api.scan.runNow()
+    const r = await window.api.scan.runNow(sinceMs)
     setChecking(false)
     if (r.status === 'no_api_key') setNote('Add your Anthropic API key in Settings first.')
     else if (r.status === 'no_accounts') setNote('Add a Gmail account first.')
     else if (r.status === 'already_running') setNote('A check is already running.')
+    else if (r.stopReason === 'bad_time') setNote('Pick a time in the past.')
+    else if (sinceMs !== undefined) {
+      const done = `Summarized ${r.triaged} email${r.triaged === 1 ? '' : 's'}, wrote ${r.drafted} draft${r.drafted === 1 ? '' : 's'}.`
+      const more =
+        r.stopReason === 'cap_emails' || r.stopReason === 'cap_tokens'
+          ? ' The per-check limit was reached — press “Check from this time” again to continue.'
+          : ''
+      setNote(done + more)
+    }
     await load()
+  }
+
+  const checkSince = (): void => {
+    const ms = new Date(since).getTime()
+    if (!since || !Number.isFinite(ms)) return setNote('Pick a date and time first.')
+    if (ms > Date.now()) return setNote('Pick a time in the past.')
+    void check(ms)
   }
 
   return (
@@ -76,7 +103,21 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
               ))}
             </select>
           )}
-          <button className="btn primary" onClick={checkNow} disabled={checking}>
+          <label className="since" title="Get all inbox mail received since this date and time">
+            From
+            <input
+              type="datetime-local"
+              step="1"
+              value={since}
+              max={toLocalInput(new Date())}
+              onChange={(e) => setSince(e.target.value)}
+              aria-label="Check mail received since"
+            />
+          </label>
+          <button className="btn" onClick={checkSince} disabled={checking}>
+            Check from this time
+          </button>
+          <button className="btn primary" onClick={() => void check()} disabled={checking}>
             {checking ? 'Checking…' : 'Check now'}
           </button>
         </div>

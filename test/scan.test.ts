@@ -117,6 +117,23 @@ describe('runScan', () => {
     expect(repo.getAccount(a.id)!.lastHistoryId).toBe('H1')
   })
 
+  it('run({ sinceMs }) lists by search from that time and skips mail already known', async () => {
+    const a = addAccount()
+    const g = fakeGmail([])
+    const queries: unknown[] = []
+    g.users.messages.list = async (p) => {
+      queries.push(p.q)
+      return { data: { messages: [{ id: 'm3' }, { id: 'm2' }, { id: 'm1' }] } }
+    }
+    const s = createScanner(deps({ gmails: { [a.id]: g } }))
+    await s.run({ sinceMs: 1_799_000_000_000 })
+    expect(queries[0]).toBe('in:inbox after:1799000000')
+    expect(triageCalls).toHaveLength(3)
+    const again = await s.run({ sinceMs: 1_799_000_000_000 })
+    expect(again.triaged).toBe(0)
+    expect(triageCalls).toHaveLength(3)
+  })
+
   it('stops when token budget exhausted', async () => {
     const a = addAccount()
     const r = await createScanner(deps({ gmails: { [a.id]: fakeGmail(ids(10)) }, settings: { maxTokensPerRun: 250 } })).run()

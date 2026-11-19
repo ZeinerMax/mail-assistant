@@ -117,7 +117,8 @@ export interface Api {
     create(emailId: number): Promise<{ ok: boolean; error?: string }>
   }
   usage: { summary(): Promise<UsageSummary> }
-  scan: { runNow(): Promise<RunResultView> }
+  /** sinceMs: check all inbox mail received since then (otherwise only mail new since the last check). */
+  scan: { runNow(sinceMs?: number): Promise<RunResultView> }
   calendar: { events(startIso: string, endIso: string): Promise<CalResult> }
   onStatus(cb: (s: StatusEvent) => void): () => void
   onBadge(cb: (unseenDrafts: number) => void): () => void
