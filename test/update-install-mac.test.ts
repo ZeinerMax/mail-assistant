@@ -66,7 +66,7 @@ describe('installMac', () => {
         execPath: `${APP}/Contents/MacOS/Mail Assistant`,
         pid: 7,
         workDir: '/u/0.3.0',
-        run: async (cmd: string, args: string[]) => {
+        run: async (cmd: string, args: string[]): Promise<string> => {
           calls.push({ cmd, args })
           return cmd.endsWith('PlistBuddy') ? '0.3.0\n' : ''
         },
