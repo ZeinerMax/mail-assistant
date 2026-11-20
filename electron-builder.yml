@@ -35,6 +35,10 @@ mac:
   target:
     - target: dmg
       arch: [arm64, x64]
+    # The zip is what the app's own updater installs (see src/main/update/install-mac.ts).
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: Mail-Assistant-${version}-${arch}-mac.${ext}
   # No paid Apple certificate: ad-hoc signature ("-") so Apple Silicon will launch it.
   # Per electron-builder docs, ad-hoc signing needs hardenedRuntime: false.
   identity: '-'

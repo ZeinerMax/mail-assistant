@@ -80,6 +80,18 @@ npm run build; npx electron .                   # opens with fake demo mail
 ```
 These two variables are ignored in packaged builds.
 
+## Releasing an update (one click for the users)
+
+1. Raise `version` in `package.json` (e.g. `npm version minor --no-git-tag-version`), commit, push.
+2. GitHub → **Actions → Build installers → Run workflow** (optionally type "What's new").
+3. The workflow builds macOS (`.dmg` + `.zip`) and Windows (`Setup.exe`), writes `latest.json` (SHA-256 + size per platform) and publishes GitHub Release `v<version>`. It refuses to overwrite an existing version.
+
+The installed app checks `releases/latest/download/latest.json` 10 seconds after start and every 6 hours (also **Settings → Updates → Check for updates**). When there is a newer version it shows **"New version X is available — Update and restart"**. One click downloads the file with the app's own HTTPS client (GitHub hosts only), checks size + SHA-256, then:
+- **macOS:** unpacks the `.zip` with `ditto`, checks the bundle version, and a small script swaps `/Applications/Mail Assistant.app` after the app quits, removes the quarantine flag and reopens it. If the swap fails, the old app is put back. Needs the app in a folder the user can write to (`/Applications` on an admin account); otherwise the banner says so and offers **Download manually**.
+- **Windows:** runs the verified `Setup.exe` silently (`/S --updated --force-run`), which replaces and restarts the app.
+
+Never during a running mail check. Settings, API key, sign-ins and mail data live in the user-data folder and are kept. The very first version with the updater (0.2.0) must be installed by hand once.
+
 ## Build installers (GitHub Actions)
 
 1. In the GitHub repository: *Settings → Secrets and variables → Actions → New repository secret*: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
