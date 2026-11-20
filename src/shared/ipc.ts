@@ -164,3 +164,14 @@ export interface Api {
   onBadge(cb: (unseenDrafts: number) => void): () => void
   onDataChanged(cb: () => void): () => void
 }
+
+/** Where the app's own update stands (shown in the banner and in Settings). */
+export type UpdateState =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  | { phase: 'available'; version: string; notes: string }
+  | { phase: 'waiting'; version: string }
+  | { phase: 'downloading'; version: string; percent: number }
+  | { phase: 'installing'; version: string }
+  | { phase: 'error'; message: string; version?: string }
+  | { phase: 'uptodate'; checkedAt: number }
