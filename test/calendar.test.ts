@@ -5,7 +5,7 @@ import type { Account } from '@shared/types'
 import type { calendar_v3 } from '@googleapis/calendar'
 
 const acc = (id: number, color: string, status: Account['status'] = 'ok'): Account => ({
-  id, email: `a${id}@gmail.com`, label: `A${id}`, color, status, lastHistoryId: null, lastCheckedAt: null, createdAt: 0
+  id, kind: 'gmail', imap: null, email: `a${id}@gmail.com`, label: `A${id}`, color, status, lastHistoryId: null, lastCheckedAt: null, createdAt: 0
 })
 
 function cal(events: Record<string, unknown[][]>, calendars = [{ id: 'primary' }]): CalendarLike & { calls: Record<string, unknown>[] } {

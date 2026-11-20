@@ -1,10 +1,15 @@
 import type { Db } from './schema'
-import type { Account, AccountStatus, DraftRow, EmailRow, EmailState, NewEmail, Tag, UsageRow } from '@shared/types'
+import type { Account, AccountKind, AccountStatus, DraftRow, EmailRow, EmailState, NewEmail, Tag, UsageRow } from '@shared/types'
 
 type Row = Record<string, unknown>
 
 const toAccount = (r: Row): Account => ({
   id: r.id as number,
+  kind: ((r.kind as AccountKind | undefined) ?? 'gmail') as AccountKind,
+  imap:
+    r.kind === 'imap'
+      ? { host: r.imap_host as string, port: r.imap_port as number, user: r.imap_user as string }
+      : null,
   email: r.email as string,
   label: r.label as string,
   color: r.color as string,
@@ -26,7 +31,9 @@ const toEmail = (r: Row): EmailRow => ({
   tag: (r.tag as Tag | null) ?? null,
   summary: (r.summary as string | null) ?? null,
   state: r.state as EmailState,
-  attempts: r.attempts as number
+  attempts: r.attempts as number,
+  answered: r.answered === 1,
+  threadSize: (r.thread_size as number | null) ?? null
 })
 
 const toDraft = (r: Row): DraftRow => ({
@@ -52,6 +59,18 @@ export class Repo {
       .prepare('INSERT INTO accounts (email,label,color,last_history_id,created_at) VALUES (?,?,?,?,?)')
       .run(a.email, a.label, a.color, a.lastHistoryId, this.now())
     return this.getAccount(Number(info.lastInsertRowid))!
+  }
+  addImapAccount(a: { email: string; label: string; color: string; host: string; port: number; user: string }): Account {
+    const info = this.db
+      .prepare(
+        `INSERT INTO accounts (email,label,color,last_history_id,created_at,kind,imap_host,imap_port,imap_user)
+         VALUES (?,?,?,NULL,?,'imap',?,?,?)`
+      )
+      .run(a.email, a.label, a.color, this.now(), a.host, a.port, a.user)
+    return this.getAccount(Number(info.lastInsertRowid))!
+  }
+  setImapSettings(id: number, s: { host: string; port: number; user: string }): void {
+    this.db.prepare('UPDATE accounts SET imap_host=?, imap_port=?, imap_user=? WHERE id=?').run(s.host, s.port, s.user, id)
   }
   getAccount(id: number): Account | null {
     const r = this.db.prepare('SELECT * FROM accounts WHERE id=?').get(id) as Row | undefined
@@ -100,6 +119,20 @@ export class Repo {
   }
   setTriage(emailId: number, t: { summary: string; tag: Tag }): void {
     this.db.prepare("UPDATE emails SET summary=?, tag=?, state='triaged' WHERE id=?").run(t.summary, t.tag, emailId)
+  }
+  /** Open "needs reply" mail (not yet known to be answered) received since sinceMs, newest first. */
+  openNeedsReply(sinceMs: number, limit: number): EmailRow[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT * FROM emails WHERE tag='needs_reply' AND answered=0 AND received_at>=? ORDER BY received_at DESC LIMIT ?"
+        )
+        .all(sinceMs, limit) as Row[]
+    ).map(toEmail)
+  }
+  /** Conversation facts found while preparing a draft. */
+  setThreadInfo(emailId: number, t: { answered: boolean; size: number }): void {
+    this.db.prepare('UPDATE emails SET answered=?, thread_size=? WHERE id=?').run(t.answered ? 1 : 0, t.size, emailId)
   }
   markAttemptFailed(emailId: number): { attempts: number; state: EmailState } {
     this.db.prepare("UPDATE emails SET attempts=attempts+1, state='failed' WHERE id=?").run(emailId)
@@ -154,7 +187,13 @@ export class Repo {
     this.db.prepare('UPDATE drafts SET copied_at=?, seen_at=COALESCE(seen_at, ?) WHERE id=?').run(this.now(), this.now(), id)
   }
   unseenDraftCount(): number {
-    return (this.db.prepare('SELECT COUNT(*) AS n FROM drafts WHERE seen_at IS NULL').get() as Row).n as number
+    return (
+      this.db
+        .prepare(
+          'SELECT COUNT(*) AS n FROM drafts d JOIN emails e ON e.id = d.email_id WHERE d.seen_at IS NULL AND e.answered = 0'
+        )
+        .get() as Row
+    ).n as number
   }
 
   // ---- runs + usage

@@ -22,7 +22,7 @@ export const TRIAGE_SYSTEM = `You help one person keep up with their email. For 
 
 ${UNTRUSTED_RULE}
 
-Summary: one or two short sentences in English, at most about 40 words. Say who wants what, and include any date, deadline, amount or place that matters. No greeting, no advice.
+Summary: one or two short sentences, at most about 40 words, written in the SAME LANGUAGE as the email body (a Czech email gets a Czech summary, an English email an English summary; if the email mixes languages, use the language of most of its own text). Say who wants what, and include any date, deadline, amount or place that matters. No greeting, no advice.
 
 Tags:
 - needs_reply: a real person expects a personal answer from the recipient — a question, invitation, request, or scheduling.
@@ -54,7 +54,7 @@ ${UNTRUSTED_RULE}
 The thread is given oldest to newest; each message is in its own tag. Reply to the message marked TARGET.
 
 Rules:
-- Write in the same language as the TARGET message, in the owner's voice, matching the thread's tone (formal or friendly).
+- Write in the SAME LANGUAGE as the TARGET message (a Czech message gets a Czech reply, with correct Czech diacritics; an English message an English reply), in the owner's voice, matching the thread's tone (formal or friendly, e.g. vykání or tykání as used in the thread).
 - Plain text only: no subject line, no markdown. Start with a greeting suitable for the language and end with a short sign-off without a name.
 - Keep it short — usually 2 to 6 sentences — and answer every question asked.
 - Never invent facts, dates, times, prices, promises or commitments. Where the owner must decide or add something, write a placeholder in square brackets, e.g. [confirm time] or [your answer].

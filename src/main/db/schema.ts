@@ -57,6 +57,14 @@ const MIGRATIONS: string[] = [
     cost_usd REAL NOT NULL,
     created_at INTEGER NOT NULL
   );
+  `,
+  `
+  ALTER TABLE accounts ADD COLUMN kind TEXT NOT NULL DEFAULT 'gmail' CHECK (kind IN ('gmail','imap'));
+  ALTER TABLE accounts ADD COLUMN imap_host TEXT;
+  ALTER TABLE accounts ADD COLUMN imap_port INTEGER;
+  ALTER TABLE accounts ADD COLUMN imap_user TEXT;
+  ALTER TABLE emails ADD COLUMN answered INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE emails ADD COLUMN thread_size INTEGER;
   `
 ]
 

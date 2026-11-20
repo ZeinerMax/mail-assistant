@@ -37,7 +37,8 @@ describe('schema + repo', () => {
     const cols = (db.prepare('PRAGMA table_info(emails)').all() as { name: string }[]).map((c) => c.name)
     const allowed = [
       'id', 'account_id', 'gmail_message_id', 'gmail_thread_id', 'received_at',
-      'from_name', 'from_email', 'subject', 'tag', 'summary', 'state', 'attempts'
+      'from_name', 'from_email', 'subject', 'tag', 'summary', 'state', 'attempts',
+      'answered', 'thread_size' // flags about the conversation, no text
     ]
     expect(cols.every((c) => allowed.includes(c))).toBe(true)
   })

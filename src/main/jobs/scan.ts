@@ -9,6 +9,7 @@ import { ReloginRequired } from '../google/accounts'
 import { costUsd, RunBudget } from '../ai/usage'
 import type { TokenUsage } from '../ai/triage'
 import { EtaTracker } from './status'
+import { isAnswered, withTarget } from './thread'
 import { log, redactError } from '../log'
 
 /** The two model calls, injected so the scan can be tested without the network. */
@@ -50,6 +51,9 @@ export interface RunResult {
   reloginAccounts: string[]
 }
 
+const RECHECK_DAYS = 14
+const RECHECK_LIMIT = 100
+const DAY_MS = 24 * 3600_000
 const PROMO_LABELS = ['CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL']
 const NET_CODES = new Set(['ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH', 'ECONNABORTED'])
 
@@ -84,9 +88,16 @@ export interface RunOptions {
   sinceMs?: number
 }
 
+/** The conversation of an email, always including the email itself. */
+export async function loadThread(gmail: GmailLike, row: Pick<EmailRow, 'gmailThreadId' | 'gmailMessageId'>): Promise<gmail_v1.Schema$Thread> {
+  const thread = await getThread(gmail, row.gmailThreadId)
+  if ((thread.messages ?? []).some((m) => m.id === row.gmailMessageId)) return thread
+  return withTarget(thread, await getMessage(gmail, row.gmailMessageId))
+}
+
 export function createScanner(deps: ScanDeps): {
   run(opts?: RunOptions): Promise<RunResult>
-  draftOne(emailId: number): Promise<'ok' | 'exists' | 'busy' | 'no_api_key' | 'not_found' | 'failed'>
+  draftOne(emailId: number): Promise<'ok' | 'exists' | 'answered' | 'busy' | 'no_api_key' | 'not_found' | 'failed'>
   isRunning(): boolean
 } {
   let running = false
@@ -103,6 +114,9 @@ export function createScanner(deps: ScanDeps): {
     const eta = new EtaTracker()
     const runId = repo.startRun()
     const needsReply: { emailId: number; accountId: number; gmail: GmailLike; row: EmailRow }[] = []
+    const mailboxes = new Map<number, GmailLike>()
+    // A reply from any of the owner's connected addresses counts as "answered".
+    const owners = accounts.map((a) => a.email)
 
     const record = (model: string, u: TokenUsage): void => {
       budget.add(u)
@@ -120,6 +134,7 @@ export function createScanner(deps: ScanDeps): {
       let listing: { ids: string[]; newHistoryId: string }
       try {
         gmail = await deps.getGmail(acc.id)
+        mailboxes.set(acc.id, gmail)
         listing = await listNewMessageIds(
           gmail,
           { historyId: acc.lastHistoryId, lastCheckedAt: acc.lastCheckedAt },
@@ -204,7 +219,7 @@ export function createScanner(deps: ScanDeps): {
 
     async function draftAll(): Promise<void> {
       if (!ai.draft || needsReply.length === 0) return
-      const todo = needsReply.filter((n) => !repo.hasDraft(n.emailId))
+      const todo = needsReply.filter((n) => !repo.hasDraft(n.emailId) && !repo.getEmail(n.emailId)?.answered)
       const draftEta = new EtaTracker()
       for (let i = 0; i < todo.length; i++) {
         if (result.drafted >= settings.maxDraftsPerRun) throw new StopRun('cap_drafts')
@@ -214,7 +229,14 @@ export function createScanner(deps: ScanDeps): {
         emit({ phase: 'drafting', accountLabel: acc?.label, index: i + 1, total: todo.length, etaSec: draftEta.etaSec(todo.length - i) })
         const started = Date.now()
         try {
-          const thread = await getThread(n.gmail, n.row.gmailThreadId)
+          const thread = await loadThread(n.gmail, n.row)
+          const answered = isAnswered(thread, n.row.gmailMessageId, owners)
+          repo.setThreadInfo(n.emailId, { answered, size: thread.messages?.length ?? 1 })
+          if (answered) {
+            // Important, but the owner already replied: note it instead of drafting.
+            draftEta.record(Date.now() - started)
+            continue
+          }
           const d = await ai.draft({ thread, targetMessageId: n.row.gmailMessageId, ownerEmail: acc?.email })
           record(settings.draftModel, d.usage)
           repo.addDraft(n.emailId, d.body)
@@ -230,6 +252,25 @@ export function createScanner(deps: ScanDeps): {
           log.warn('draft_failed', { email: n.emailId, ...redactError(e) })
         }
         draftEta.record(Date.now() - started)
+      }
+    }
+
+    /**
+     * Re-checks older open "needs reply" mail: the owner may have answered since the last check.
+     * Answered mail is then labelled as such (and its draft is hidden), never drafted again.
+     */
+    async function recheckAnswered(): Promise<void> {
+      const fresh = new Set(needsReply.map((n) => n.emailId))
+      for (const e of repo.openNeedsReply(now() - RECHECK_DAYS * DAY_MS, RECHECK_LIMIT)) {
+        const gmail = mailboxes.get(e.accountId)
+        if (fresh.has(e.id) || !gmail) continue
+        try {
+          const thread = await loadThread(gmail, e)
+          repo.setThreadInfo(e.id, { answered: isAnswered(thread, e.gmailMessageId, owners), size: thread.messages?.length ?? 1 })
+        } catch (err) {
+          if (isNetworkError(err)) return
+          log.warn('answered_check_failed', { email: e.id, ...redactError(err) })
+        }
       }
     }
 
@@ -254,6 +295,7 @@ export function createScanner(deps: ScanDeps): {
           log.error('account_scan_failed', { account: acc.id, ...redactError(e) })
         }
       }
+      await recheckAnswered()
       await draftAll()
     } catch (e) {
       if (!(e instanceof StopRun)) throw e
@@ -261,6 +303,7 @@ export function createScanner(deps: ScanDeps): {
       // A cap stop still lets drafts for already-triaged mail be written (they have their own cap).
       if (e.reason === 'cap_emails') {
         try {
+          await recheckAnswered()
           await draftAll()
         } catch (e2) {
           if (!(e2 instanceof StopRun)) throw e2
@@ -278,18 +321,28 @@ export function createScanner(deps: ScanDeps): {
   }
 
   /** Manual "Write draft" for one email (e.g. after a cap or a failed draft). Shares the run lock. */
-  async function draftOne(emailId: number): Promise<'ok' | 'exists' | 'busy' | 'no_api_key' | 'not_found' | 'failed'> {
+  async function draftOne(
+    emailId: number
+  ): Promise<'ok' | 'exists' | 'answered' | 'busy' | 'no_api_key' | 'not_found' | 'failed'> {
     if (!deps.ai?.draft) return 'no_api_key'
     if (running) return 'busy'
     const { repo, settings } = deps
     const e = repo.getEmail(emailId)
     if (!e) return 'not_found'
     if (repo.hasDraft(emailId)) return 'exists'
+    if (e.answered) return 'answered'
     running = true
     try {
       deps.emit({ phase: 'drafting', index: 1, total: 1 })
       const gmail = await deps.getGmail(e.accountId)
-      const thread = await getThread(gmail, e.gmailThreadId)
+      const thread = await loadThread(gmail, e)
+      const answered = isAnswered(
+        thread,
+        e.gmailMessageId,
+        repo.listAccounts().map((a) => a.email)
+      )
+      repo.setThreadInfo(emailId, { answered, size: thread.messages?.length ?? 1 })
+      if (answered) return 'answered'
       const d = await deps.ai.draft({
         thread,
         targetMessageId: e.gmailMessageId,

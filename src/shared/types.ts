@@ -25,8 +25,20 @@ export interface Settings {
 
 export type AccountStatus = 'ok' | 'needs_relogin' | 'error'
 
+/** gmail: Google sign-in + Gmail API. imap: any other mailbox (e.g. Webglobe) over IMAP, password in secure storage. */
+export type AccountKind = 'gmail' | 'imap'
+
+export interface ImapSettings {
+  host: string
+  port: number
+  user: string
+}
+
 export interface Account {
   id: number
+  kind: AccountKind
+  /** IMAP server settings (no password); null for Gmail accounts. */
+  imap: ImapSettings | null
   email: string
   label: string
   color: string
@@ -54,6 +66,10 @@ export interface EmailRow extends NewEmail {
   summary: string | null
   state: EmailState
   attempts: number
+  /** The owner already replied (found in the conversation), so no draft is written. */
+  answered: boolean
+  /** Number of messages in the conversation, once known (null = not looked up yet). */
+  threadSize: number | null
 }
 
 export interface DraftRow {

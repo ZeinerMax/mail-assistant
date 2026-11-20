@@ -14,7 +14,11 @@ const FORBIDDEN: [string, RegExp][] = [
   ['calendar write', /events\s*\.\s*(insert|update|patch|delete|move|quickAdd|import)\b/],
   ['calendar list write', /calendarList\s*\.\s*(insert|update|patch|delete)\b/],
   ['non-readonly google scope', /googleapis\.com\/auth\/(?!gmail\.readonly\b|calendar\.readonly\b)/],
-  ['full gmail scope', /mail\.google\.com/]
+  ['full gmail scope', /mail\.google\.com\/(?!mail\/\?authuser=)/],
+  // IMAP: only connect/list/search/fetch/logout; never flags, moves, copies, deletes, appends or folder changes.
+  ['imap write', /\.(messageFlagsAdd|messageFlagsSet|messageFlagsRemove|setFlagColor|messageDelete|messageMove|messageCopy|append|mailboxCreate|mailboxDelete|mailboxRename|mailboxSubscribe|mailboxUnsubscribe)\(/],
+  ['imap mailbox opened writable', /(getMailboxLock|mailboxOpen)\((?![^)]*readOnly:\s*true)[^)]*\)/],
+  ['smtp / sending library', /from ['"](nodemailer|smtp)/]
 ]
 
 function files(dir: string): string[] {
@@ -33,6 +37,13 @@ describe('no write paths', () => {
       for (const [name, re] of FORBIDDEN) if (re.test(text)) hits.push(`${relative(root, f)}: ${name}`)
     }
     expect(hits).toEqual([])
+  })
+
+  it('the guard catches IMAP writes and writable mailboxes', () => {
+    const hit = (code: string): boolean => FORBIDDEN.some(([, re]) => re.test(code))
+    expect(hit("await client.messageFlagsAdd('1', ['\Seen'])")).toBe(true)
+    expect(hit("await client.getMailboxLock('INBOX')")).toBe(true)
+    expect(hit("await client.getMailboxLock('INBOX', { readOnly: true })")).toBe(false)
   })
 
   it('the guard itself catches a write call', () => {

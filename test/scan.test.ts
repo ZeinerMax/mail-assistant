@@ -268,6 +268,72 @@ describe('runScan', () => {
       expect(statuses.some((s) => s.phase === 'drafting')).toBe(true)
     })
 
+    it('already answered → no draft, email marked answered with its conversation size', async () => {
+      const a = addAccount()
+      const calls: string[] = []
+      const g = fakeGmail(['m1', 'm2'])
+      // m1's conversation contains a later reply sent by the owner; m2 stands alone.
+      g.users.threads.get = async (p) => {
+        const id = (p.id as string).slice(2)
+        const own = { ...message('r' + id), labelIds: ['SENT'], internalDate: String(1_900_000_000_000) }
+        return { data: { id: p.id as string, messages: id === 'm1' ? [message(id), own] : [message(id)] } }
+      }
+      const r = await createScanner(
+        deps({ ai: { triage: okTriage('needs_reply'), draft: drafter(calls) }, gmails: { [a.id]: g } })
+      ).run()
+      expect(calls).toEqual(['m2'])
+      expect(r.drafted).toBe(1)
+      const m1 = repo.findEmail(a.id, 'm1')!
+      expect(m1).toMatchObject({ answered: true, threadSize: 2, tag: 'needs_reply' })
+      expect(repo.hasDraft(m1.id)).toBe(false)
+      expect(repo.findEmail(a.id, 'm2')).toMatchObject({ answered: false, threadSize: 1 })
+    })
+
+    it('older open needs_reply mail is re-checked each run; once answered its draft is hidden', async () => {
+      const a = addAccount()
+      const calls: string[] = []
+      let replied = false
+      const g = fakeGmail(['m1'])
+      g.users.threads.get = async (p) => {
+        const id = (p.id as string).slice(2)
+        const own = { ...message('r' + id), labelIds: ['SENT'], internalDate: String(1_900_000_000_000) }
+        return { data: { id: p.id as string, messages: replied ? [message(id), own] : [message(id)] } }
+      }
+      const s = createScanner(
+        deps({
+          ai: { triage: okTriage('needs_reply'), draft: drafter(calls) },
+          gmails: { [a.id]: g },
+          now: () => 1_700_000_000_000 + 3600_000 // the test mail arrived an hour ago (within the re-check window)
+        })
+      )
+      await s.run()
+      const m1 = repo.findEmail(a.id, 'm1')!
+      expect(repo.hasDraft(m1.id)).toBe(true)
+      expect(repo.unseenDraftCount()).toBe(1)
+      // The owner replies in Gmail; the next check (no new mail) notices it.
+      replied = true
+      g.users.history.list = async () => ({ data: { history: [] } })
+      await s.run()
+      expect(repo.getEmail(m1.id)).toMatchObject({ answered: true, threadSize: 2 })
+      expect(repo.unseenDraftCount()).toBe(0)
+      expect(calls).toEqual(['m1'])
+    })
+
+    it('draftOne refuses an email that was already answered', async () => {
+      const a = addAccount()
+      const g = fakeGmail(['m1'])
+      g.users.threads.get = async (p) => ({
+        data: { id: p.id as string, messages: [message('m1'), { ...message('r1'), labelIds: ['SENT'], internalDate: String(1_900_000_000_000) }] }
+      })
+      const calls: string[] = []
+      const s = createScanner(deps({ ai: { triage: okTriage('info'), draft: drafter(calls) }, gmails: { [a.id]: g } }))
+      await s.run()
+      const m1 = repo.findEmail(a.id, 'm1')!
+      expect(await s.draftOne(m1.id)).toBe('answered')
+      expect(calls).toEqual([])
+      expect(repo.getEmail(m1.id)!.answered).toBe(true)
+    })
+
     it('stops drafting at maxDraftsPerRun with cap_drafts', async () => {
       const a = addAccount()
       const calls: string[] = []

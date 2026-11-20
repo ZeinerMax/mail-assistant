@@ -24,9 +24,15 @@ const api: Api = {
     add: () => inv(CH.accountsAdd),
     relogin: (id) => inv(CH.accountsRelogin, id),
     remove: (id) => inv(CH.accountsRemove, id),
-    rename: (id, label) => inv(CH.accountsRename, id, label)
+    rename: (id, label) => inv(CH.accountsRename, id, label),
+    addImap: (form) => inv(CH.accountsAddImap, form),
+    setImapPassword: (id, password) => inv(CH.accountsImapPassword, id, password)
   },
-  mail: { list: (f) => inv(CH.mailList, f) },
+  mail: {
+    list: (f) => inv(CH.mailList, f),
+    message: (id) => inv(CH.mailMessage, id),
+    thread: (id) => inv(CH.mailThread, id)
+  },
   drafts: {
     list: () => inv(CH.draftsList),
     markSeen: (id) => inv(CH.draftsMarkSeen, id),

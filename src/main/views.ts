@@ -3,6 +3,7 @@ import type { StatusEvent, Tag } from '@shared/types'
 import { formatClock } from '@shared/format'
 import type { Repo } from './db/repo'
 import type { RunResult } from './jobs/scan'
+import { gmailWebUrl } from './mailview'
 
 const LIST_LIMIT = 500
 
@@ -22,7 +23,11 @@ export function buildMailItems(repo: Repo, f: { tag?: Tag; accountId?: number })
       summary: e.summary,
       tag: e.tag,
       state: e.state,
-      hasDraft: repo.hasDraft(e.id)
+      hasDraft: repo.hasDraft(e.id),
+      accountKind: a?.kind ?? 'gmail',
+      answered: e.answered,
+      threadSize: e.threadSize,
+      webUrl: a && a.kind === 'gmail' ? gmailWebUrl(a.email, e.gmailMessageId) : null
     }
   })
 }
@@ -31,7 +36,7 @@ export function buildDraftItems(repo: Repo): DraftItem[] {
   const accounts = new Map(repo.listAccounts().map((a) => [a.id, a]))
   return repo.listDrafts().flatMap((d) => {
     const e = repo.getEmail(d.emailId)
-    if (!e) return []
+    if (!e || e.answered) return [] // already answered: the draft is no longer useful
     const a = accounts.get(e.accountId)
     return [
       {

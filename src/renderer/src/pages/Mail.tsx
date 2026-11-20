@@ -3,6 +3,7 @@ import type { Account, Tag } from '@shared/types'
 import type { MailItem } from '@shared/ipc'
 import { relativeDay } from '@shared/format'
 import type { Page } from '../App'
+import MailViewer, { type ViewMode } from '../components/MailViewer'
 
 const TAG_LABEL: Record<Tag, string> = {
   needs_reply: 'Needs reply',
@@ -30,6 +31,8 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
   const [checking, setChecking] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [since, setSince] = useState<string>(startOfToday)
+  const [view, setView] = useState<{ id: number; mode: ViewMode } | null>(null)
+  const viewing = view ? items.find((i) => i.id === view.id) : undefined
 
   const load = useCallback(async () => {
     const [m, a] = await Promise.all([window.api.mail.list({}), window.api.accounts.list()])
@@ -67,7 +70,7 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
     const r = await window.api.scan.runNow(sinceMs)
     setChecking(false)
     if (r.status === 'no_api_key') setNote('Add your Anthropic API key in Settings first.')
-    else if (r.status === 'no_accounts') setNote('Add a Gmail account first.')
+    else if (r.status === 'no_accounts') setNote('Add an email account first.')
     else if (r.status === 'already_running') setNote('A check is already running.')
     else if (r.stopReason === 'bad_time') setNote('Pick a time in the past.')
     else if (sinceMs !== undefined) {
@@ -141,7 +144,7 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
           </button>
         ))}
         <button className="stat" onClick={() => goTo('drafts')}>
-          <div className="num">{scoped.filter((i) => i.hasDraft).length}</div>
+          <div className="num">{scoped.filter((i) => i.hasDraft && !i.answered).length}</div>
           <div className="lbl">Drafts ready</div>
         </button>
       </div>
@@ -159,7 +162,7 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
         <div className="empty">
           <div className="big">No accounts yet</div>
           <button className="btn primary" onClick={() => goTo('accounts')}>
-            Add a Gmail account
+            Add an email account
           </button>
         </div>
       ) : shown.length === 0 ? (
@@ -180,15 +183,20 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
                 </span>
                 {m.state === 'failed' ? (
                   <span className="tag failed">Couldn&apos;t summarize</span>
+                ) : m.answered ? (
+                  <span className="tag answered" title="Needed a reply, but you already answered it, so no draft was written">
+                    Important — already answered
+                  </span>
                 ) : (
                   m.tag && <span className={`tag ${m.tag}`}>{TAG_LABEL[m.tag]}</span>
                 )}
-                {m.hasDraft ? (
+                {m.answered ? null : m.hasDraft ? (
                   <button className="link" onClick={() => goTo('drafts')}>
                     Draft ready →
                   </button>
                 ) : (
-                  m.tag === 'needs_reply' && (
+                  m.tag === 'needs_reply' &&
+                  !m.answered && (
                     <button className="link" disabled={drafting === m.id} onClick={() => writeDraft(m.id)}>
                       {drafting === m.id ? 'Writing draft…' : 'Write draft'}
                     </button>
@@ -200,9 +208,27 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
                 {m.subject}
               </div>
               {m.summary && <div className="sum">{m.summary}</div>}
+              <div className="actions">
+                <button className="link" onClick={() => setView({ id: m.id, mode: 'message' })}>
+                  Open email
+                </button>
+                {m.tag === 'needs_reply' && m.webUrl && (
+                  <a className="link" href={m.webUrl} target="_blank" rel="noreferrer">
+                    Open in Gmail ↗
+                  </a>
+                )}
+              </div>
             </div>
           ))}
         </div>
+      )}
+      {viewing && view && (
+        <MailViewer
+          item={viewing}
+          mode={view.mode}
+          onMode={(mode) => setView({ id: viewing.id, mode })}
+          onClose={() => setView(null)}
+        />
       )}
     </>
   )

@@ -17,6 +17,8 @@ import { triage } from './ai/triage'
 import { buildDraftContext, draftReply } from './ai/draft'
 import { createScanner, type AiPort, type RunOptions, type RunResult } from './jobs/scan'
 import { createScheduler } from './jobs/scheduler'
+import { createImapAccounts } from './imap/accounts'
+import { makeImapClient, parseMail } from './imap/client'
 import { notifyDraftsReady } from './notify'
 import { finalStatus } from './views'
 import { CH, type RunResultView } from '@shared/ipc'
@@ -91,6 +93,13 @@ app.whenReady().then(() => {
     makeAuth
   })
   const win = { getWindow: () => mainWindow }
+  const imap = createImapAccounts({ repo, secrets, makeClient: makeImapClient, parse: parseMail })
+
+  /** Read-only mailbox for one account: Gmail API, or IMAP for other providers. */
+  const openMailbox = async (id: number): Promise<GmailLike> => {
+    if (repo.getAccount(id)?.kind === 'imap') return imap.open(id)
+    return gmailFor(await accounts.getAuth(id)) as unknown as GmailLike
+  }
 
   /** Built per run so a new API key / settings apply immediately. Full email text stays inside these closures. */
   function aiPort(): AiPort | null {
@@ -121,7 +130,7 @@ app.whenReady().then(() => {
     get ai() {
       return aiPort()
     },
-    getGmail: async (id) => gmailFor(await accounts.getAuth(id)) as unknown as GmailLike,
+    getGmail: openMailbox,
     emit: (s) => emitStatus(win, s),
     now: () => Date.now(),
     onDraftsReady: (count) =>
@@ -167,6 +176,8 @@ app.whenReady().then(() => {
     repo,
     secrets,
     accounts,
+    imap,
+    openMailbox,
     getWindow: win.getWindow,
     runNow: async (sinceMs) => {
       if (scanner.isRunning()) return { status: 'already_running', stopReason: 'done', triaged: 0, drafted: 0 }

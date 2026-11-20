@@ -10,7 +10,24 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 |---|---|
 | Stack | Electron 45 · React 19 · TypeScript · electron-vite · better-sqlite3 · electron-builder |
 | AI | `claude-haiku-5-5` (summary + tag) · `claude-sonnet-5-5` (drafts, adaptive thinking, effort `medium`) — changeable in Settings |
-| Google scopes | `gmail.readonly`, `calendar.readonly` — nothing else |## Privacy and security
+| Google scopes | `gmail.readonly`, `calendar.readonly` — nothing else |
+| Other mailboxes | IMAP (e.g. Webglobe), every folder opened **read-only** (`EXAMINE`) — mail isn't even marked as read |
+
+## Other mailboxes (IMAP, e.g. Webglobe)
+
+**Accounts → Add other email (IMAP)**: email address, IMAP server (Webglobe: `mail.webglobe.cz`), port `993` (SSL/TLS), user name (usually the full mailbox address) and password. The app logs in once to test the settings before saving. The password is encrypted like the API key.
+
+- New mail is found by IMAP UID (`UIDVALIDITY:last UID` cursor); "Check from this time" searches by date.
+- A conversation is built from the `References` / `In-Reply-To` headers across INBOX and the Sent folder.
+- No calendar for IMAP accounts. No web links either (IMAP has none), so "Open email" / "Whole conversation" show the text inside the app.
+
+## Reading mail, links and "already answered"
+
+- **Open email** shows the whole email; **Whole conversation** shows every message of the thread. Both are fetched live when opened and never stored.
+- Gmail emails that need a reply get **Open in Gmail ↗**, and longer conversations get **Whole conversation (N) ↗**.
+- Before writing a draft, the app checks the conversation. If you already replied (a later message sent by you, or the IMAP `\Answered` flag), no draft is written and the email shows **Important — already answered**.
+
+## Privacy and security
 
 - **What is stored on disk (SQLite):** account address + colour, message/thread IDs, sender name and address, subject, date, the AI summary and tag, drafts, run history and token usage.
 - **Never stored:** email bodies, quoted text, attachments, thread text. Full text exists only in memory during a check and is discarded after the model call.
