@@ -141,6 +141,27 @@ describe('runScan', () => {
     expect(triageCalls).toHaveLength(3) // 120 tokens each: 120, 240, 360 ≥ 250 after the 3rd
   })
 
+  it('hold() blocks new checks and manual drafts until released (app update installing)', async () => {
+    const a = addAccount()
+    const calls: string[] = []
+    const s = createScanner(
+      deps({
+        ai: { triage: okTriage('needs_reply'), draft: async ({ targetMessageId }) => (calls.push(targetMessageId), { body: 'x', usage: { input_tokens: 1, output_tokens: 1 } }) },
+        gmails: { [a.id]: fakeGmail(['m1']) }
+      })
+    )
+    const release = s.hold()
+    expect((await s.run()).status).toBe('already_running')
+    expect(triageCalls).toHaveLength(0)
+    release()
+    expect((await s.run()).status).toBe('done')
+    const m1 = repo.findEmail(a.id, 'm1')!
+    repo.setThreadInfo(m1.id, { answered: false, size: 1 })
+    const release2 = s.hold()
+    expect(await s.draftOne(999)).toBe('busy')
+    release2()
+  })
+
   it('second concurrent call returns already_running', async () => {
     const a = addAccount()
     const scanner = createScanner(deps({ gmails: { [a.id]: fakeGmail(['m1']) } }))

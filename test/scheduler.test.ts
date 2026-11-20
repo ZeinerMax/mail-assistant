@@ -91,6 +91,21 @@ describe('scheduler', () => {
     expect(runs).toBe(2)
   })
 
+  it('resume re-arms the timer without running at once', async () => {
+    const c = clock()
+    let runs = 0
+    const s = createScheduler({ run: async () => void runs++, intervalMin: () => 15, ...c })
+    s.start()
+    await flush()
+    s.stop()
+    s.resume()
+    await flush()
+    expect(runs).toBe(1)
+    expect(s.nextRunAt()).toBe(15 * 60_000)
+    await c.advance(15 * 60_000)
+    expect(runs).toBe(2)
+  })
+
   it('stop cancels timers', async () => {
     const c = clock()
     const s = createScheduler({ run: async () => {}, intervalMin: () => 15, ...c })

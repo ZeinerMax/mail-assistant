@@ -20,8 +20,10 @@ export interface UpdaterDeps {
   fetch: FetchLike
   /** True while a mail check runs; the update waits for it. */
   isBusy: () => boolean
-  /** Stops the scheduler before installing. May return an undo used if the install fails. */
+  /** Pauses mail checks before installing. May return an undo used if the install fails. */
   beforeInstall: () => void | (() => void)
+  /** True if an earlier install of this version failed after the app quit (macOS swap marker). */
+  hasFailed?: (version: string) => boolean
   /** Platform installer: prepares the swap / starts the setup. Throws a user-facing message on refusal. */
   install: (file: string, version: string) => Promise<void>
   quit: () => void
@@ -59,6 +61,13 @@ export function createUpdater(deps: UpdaterDeps) {
         return set(manual ? { phase: 'uptodate', checkedAt: Date.now() } : { phase: 'idle' })
       }
       offer = { version: m.version, file }
+      if (deps.hasFailed?.(m.version)) {
+        return set({
+          phase: 'error',
+          version: m.version,
+          message: `The update to ${m.version} could not be installed. Use “Download manually” to install it.`
+        })
+      }
       log.info('update_available', { version: m.version })
       return set({ phase: 'available', version: m.version, notes: m.notes })
     } catch (e) {
@@ -71,10 +80,6 @@ export function createUpdater(deps: UpdaterDeps) {
     if (!offer) await check(true)
     if (!offer) return
     const { version, file } = offer
-    while (deps.isBusy()) {
-      set({ phase: 'waiting', version })
-      await deps.sleep(BUSY_POLL_MS)
-    }
     const dest = join(deps.workRoot, version, file.name)
     set({ phase: 'downloading', version, percent: 0 })
     try {
@@ -86,8 +91,13 @@ export function createUpdater(deps: UpdaterDeps) {
       set({ phase: 'error', version, message: DOWNLOAD_FAILED })
       return
     }
-    set({ phase: 'installing', version })
+    // Pause checks first, then wait for one that may have started during the download: never quit mid-check.
     const undo = deps.beforeInstall()
+    while (deps.isBusy()) {
+      set({ phase: 'waiting', version })
+      await deps.sleep(BUSY_POLL_MS)
+    }
+    set({ phase: 'installing', version })
     try {
       await deps.install(dest, version)
     } catch (e) {

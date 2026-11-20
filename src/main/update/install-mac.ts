@@ -20,20 +20,32 @@ export function macRefusal(bundle: string, canWrite: (dir: string) => boolean): 
   return null
 }
 
-export function macSwapScript(p: { pid: number; bundle: string; newBundle: string; workDir: string }): string {
+export function macSwapScript(p: {
+  pid: number
+  bundle: string
+  newBundle: string
+  workDir: string
+  /** Every step is appended here, so a failed update on the Mac can be diagnosed. */
+  logFile?: string
+  /** Created when the swap fails; the app then stops offering this version. */
+  failMarker?: string
+}): string {
   const app = q(p.bundle)
   const old = q(p.bundle + '.old')
+  const fail = p.failMarker ? `: > ${q(p.failMarker)}; ` : ''
   return [
     '#!/bin/sh',
+    ...(p.logFile ? [`exec >>${q(p.logFile)} 2>&1`, 'set -x', 'echo "update swap started $(date)"'] : []),
     `while kill -0 ${p.pid} 2>/dev/null; do sleep 0.5; done`,
     `rm -rf ${old}`,
-    `mv ${app} ${old} || { open ${app}; exit 1; }`,
+    `mv ${app} ${old} || { ${fail}open ${app}; exit 1; }`,
     `if mv ${q(p.newBundle)} ${app}; then`,
     `  xattr -dr com.apple.quarantine ${app} 2>/dev/null`,
     `  open ${app}`,
     `  rm -rf ${old}`,
     `  rm -rf ${q(p.workDir)}`,
     'else',
+    ...(p.failMarker ? [`  : > ${q(p.failMarker)}`] : []),
     `  mv ${old} ${app}`,
     `  open ${app}`,
     'fi',
@@ -51,6 +63,8 @@ export interface MacInstallDeps {
   spawnDetached: (scriptPath: string) => void
   writeFile: (p: string, s: string) => void
   canWrite: (dir: string) => boolean
+  logFile?: string
+  failMarker?: string
 }
 
 /** Prepares the new bundle and starts the swap script. The caller quits the app afterwards. */
@@ -65,6 +79,9 @@ export async function installMac(d: MacInstallDeps): Promise<void> {
   const v = (await d.run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleShortVersionString', posix.join(newBundle, 'Contents/Info.plist')])).trim()
   if (v !== d.version) throw new Error('version mismatch')
   const script = posix.join(d.workDir, 'swap.sh')
-  d.writeFile(script, macSwapScript({ pid: d.pid, bundle, newBundle, workDir: d.workDir }))
+  d.writeFile(
+    script,
+    macSwapScript({ pid: d.pid, bundle, newBundle, workDir: d.workDir, logFile: d.logFile, failMarker: d.failMarker })
+  )
   d.spawnDetached(script)
 }

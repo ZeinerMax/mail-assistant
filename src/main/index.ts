@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow, Notification, clipboard } from 'electron'
 import { join, dirname } from 'path'
 import { execFile, spawn } from 'child_process'
-import { accessSync, constants, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { log, setLogFile, redactError } from './log'
 import { openDb } from './db/schema'
 import { Repo } from './db/repo'
@@ -205,8 +205,13 @@ app.whenReady().then(() => {
     isBusy: () => scanner.isRunning(),
     beforeInstall: () => {
       scheduler.stop()
-      return () => scheduler.start()
+      const release = scanner.hold()
+      return () => {
+        release()
+        scheduler.resume()
+      }
     },
+    hasFailed: (v) => existsSync(join(dataDir, 'updates', `failed-${v}`)),
     install: async (file, version) => {
       if (!app.isPackaged) throw new Error('Updates can only be installed in the installed app, not in development.')
       if (process.platform === 'darwin') {
@@ -216,6 +221,8 @@ app.whenReady().then(() => {
           execPath: process.execPath,
           pid: process.pid,
           workDir: dirname(file),
+          logFile: join(dataDir, 'logs', 'update-swap.log'),
+          failMarker: join(dataDir, 'updates', `failed-${version}`),
           run: (cmd, args) =>
             new Promise((resolve, reject) =>
               execFile(cmd, args, (err, stdout) => (err ? reject(err) : resolve(String(stdout))))

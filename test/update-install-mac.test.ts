@@ -46,6 +46,20 @@ describe('macSwapScript', () => {
     expect(s.lastIndexOf("rm -rf '/Applications/Mail Assistant.app.old'")).toBeGreaterThan(s.indexOf('xattr')) // the first rm only clears a leftover from an earlier run
   })
 
+  it('logs every step and leaves a failure marker when the swap fails', () => {
+    const s = macSwapScript({
+      pid: 9,
+      bundle: APP,
+      newBundle: '/u/x/Mail Assistant.app',
+      workDir: '/u/x',
+      logFile: '/Users/z/Library/Application Support/Mail Assistant/logs/update-swap.log',
+      failMarker: '/Users/z/Library/Application Support/Mail Assistant/updates/failed-0.3.0'
+    })
+    expect(s).toContain("exec >>'/Users/z/Library/Application Support/Mail Assistant/logs/update-swap.log' 2>&1")
+    expect(s).toMatch(/else[\s\S]*: > '\/Users\/z\/Library\/Application Support\/Mail Assistant\/updates\/failed-0\.3\.0'/)
+    expect(s).toMatch(/\|\| \{ : > '\/Users\/z\/Library\/Application Support\/Mail Assistant\/updates\/failed-0\.3\.0'/)
+  })
+
   it("escapes single quotes in paths", () => {
     expect(macSwapScript({ pid: 1, bundle: "/A/it's.app", newBundle: '/n', workDir: '/w' })).toContain("'/A/it'\\''s.app'")
   })

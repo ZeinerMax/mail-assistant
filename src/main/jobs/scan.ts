@@ -99,8 +99,11 @@ export function createScanner(deps: ScanDeps): {
   run(opts?: RunOptions): Promise<RunResult>
   draftOne(emailId: number): Promise<'ok' | 'exists' | 'answered' | 'busy' | 'no_api_key' | 'not_found' | 'failed'>
   isRunning(): boolean
+  /** Blocks new checks and manual drafts (an app update is installing); returns the release function. */
+  hold(): () => void
 } {
   let running = false
+  let held = 0
 
   async function runInner(opts: RunOptions = {}): Promise<RunResult> {
     const { repo, settings, emit, now } = deps
@@ -325,7 +328,7 @@ export function createScanner(deps: ScanDeps): {
     emailId: number
   ): Promise<'ok' | 'exists' | 'answered' | 'busy' | 'no_api_key' | 'not_found' | 'failed'> {
     if (!deps.ai?.draft) return 'no_api_key'
-    if (running) return 'busy'
+    if (running || held > 0) return 'busy'
     const { repo, settings } = deps
     const e = repo.getEmail(emailId)
     if (!e) return 'not_found'
@@ -369,8 +372,16 @@ export function createScanner(deps: ScanDeps): {
   return {
     draftOne,
     isRunning: () => running,
+    hold() {
+      held++
+      let done = false
+      return () => {
+        if (!done) held--
+        done = true
+      }
+    },
     async run(opts?: RunOptions) {
-      if (running) return empty('already_running')
+      if (running || held > 0) return empty('already_running')
       running = true
       try {
         return await runInner(opts)

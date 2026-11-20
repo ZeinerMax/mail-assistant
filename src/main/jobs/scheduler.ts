@@ -42,6 +42,10 @@ export function createScheduler<R, O = undefined>(deps: SchedulerDeps<R, O>) {
       timer = null
       next = null
     },
+    /** Re-arms the timer after stop() without running now (e.g. an app update was refused). */
+    resume(): void {
+      schedule()
+    },
     /** Re-arms the timer with the current interval (after Settings change). */
     reschedule(): void {
       if (next !== null) schedule()

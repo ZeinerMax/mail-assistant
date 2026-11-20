@@ -92,15 +92,31 @@ describe('update check', () => {
 })
 
 describe('update and restart', () => {
-  it('waits for a running mail check, then downloads, installs and quits', async () => {
-    let busyPolls = 2
-    const t = make({ isBusy: () => busyPolls-- > 0 })
+  it('a mail check that starts during the download is waited for; checks are paused before waiting', async () => {
+    // isBusy is false while downloading starts, then a check begins (timer/"Check now") and runs for 2 polls.
+    let busyPolls = 0
+    const log: string[] = []
+    const t = make({
+      isBusy: () => busyPolls-- > 0,
+      beforeInstall: () => {
+        log.push('pause checks')
+        busyPolls = 2 // the check that started mid-download is still running
+      },
+      emit: (s) => void log.push(s.phase)
+    })
     await t.u.check(false)
     await t.u.update()
-    const phases = t.states.map((s) => s.phase)
-    expect(phases).toContain('waiting')
-    expect(phases.indexOf('waiting')).toBeLessThan(phases.indexOf('downloading'))
-    expect(phases.indexOf('downloading')).toBeLessThan(phases.indexOf('installing'))
+    const pause = log.indexOf('pause checks')
+    expect(pause).toBeGreaterThan(log.lastIndexOf('downloading'))
+    expect(log.indexOf('waiting')).toBeGreaterThan(pause)
+    expect(log.indexOf('installing')).toBeGreaterThan(log.lastIndexOf('waiting'))
+    expect(t.installs).toHaveLength(1)
+  })
+
+  it('downloads, installs and quits in that order', async () => {
+    const t = make()
+    await t.u.check(false)
+    await t.u.update()
     expect(t.log).toEqual(['beforeInstall', 'install', 'quit'])
     expect(t.installs[0]).toMatch(/0\.3\.0[\\/]Mail-Assistant-0\.3\.0-arm64-mac\.zip$/)
   })
@@ -144,6 +160,17 @@ describe('update and restart', () => {
     await t.u.update()
     expect(t.u.state()).toMatchObject({ phase: 'error', message: expect.stringContaining('disk image') })
     expect(t.log).not.toContain('quit')
+  })
+})
+
+describe('failed install marker (macOS swap failed after quitting)', () => {
+  it('a version whose install failed is not offered again; it says so', async () => {
+    const t = make({ hasFailed: (v) => v === '0.3.0' })
+    expect(await t.u.check(false)).toEqual({
+      phase: 'error',
+      version: '0.3.0',
+      message: 'The update to 0.3.0 could not be installed. Use “Download manually” to install it.'
+    })
   })
 })
 
