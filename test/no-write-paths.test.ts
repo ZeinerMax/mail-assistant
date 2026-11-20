@@ -39,6 +39,15 @@ describe('no write paths', () => {
     expect(hits).toEqual([])
   })
 
+  it('only the updater (and the app wiring) may start other programs', () => {
+    const root = join(__dirname, '..', 'src')
+    const hits = files(root)
+      .filter((f) => /from ['"](node:)?child_process['"]/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(root, f).split('\\').join('/'))
+      .filter((f) => !f.startsWith('main/update/') && f !== 'main/index.ts')
+    expect(hits).toEqual([])
+  })
+
   it('the guard catches IMAP writes and writable mailboxes', () => {
     const hit = (code: string): boolean => FORBIDDEN.some(([, re]) => re.test(code))
     expect(hit("await client.messageFlagsAdd('1', ['\Seen'])")).toBe(true)

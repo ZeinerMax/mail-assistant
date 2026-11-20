@@ -24,10 +24,14 @@ export const CH = {
   usageSummary: 'usage:summary',
   scanRunNow: 'scan:runNow',
   calendarEvents: 'calendar:events',
+  updateState: 'update:state',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
   // main → renderer events
   evStatus: 'ev:status',
   evBadge: 'ev:badge',
-  evDataChanged: 'ev:dataChanged'
+  evDataChanged: 'ev:dataChanged',
+  evUpdate: 'ev:update'
 } as const
 
 /** Errors cross IPC as plain results so the UI can show friendly text. */
@@ -160,6 +164,14 @@ export interface Api {
   /** sinceMs: check all inbox mail received since then (otherwise only mail new since the last check). */
   scan: { runNow(sinceMs?: number): Promise<RunResultView> }
   calendar: { events(startIso: string, endIso: string): Promise<CalResult> }
+  update: {
+    /** Current update state, the running version, and the version just updated to (once per update). */
+    state(): Promise<UpdateInfo>
+    check(): Promise<UpdateState>
+    /** "Update and restart": progress arrives through onUpdate. */
+    install(): Promise<void>
+  }
+  onUpdate(cb: (s: UpdateState) => void): () => void
   onStatus(cb: (s: StatusEvent) => void): () => void
   onBadge(cb: (unseenDrafts: number) => void): () => void
   onDataChanged(cb: () => void): () => void
@@ -175,3 +187,9 @@ export type UpdateState =
   | { phase: 'installing'; version: string }
   | { phase: 'error'; message: string; version?: string }
   | { phase: 'uptodate'; checkedAt: number }
+
+export interface UpdateInfo {
+  state: UpdateState
+  current: string
+  justUpdated: string | null
+}

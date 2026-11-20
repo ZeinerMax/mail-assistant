@@ -1,5 +1,7 @@
 import { app, shell, BrowserWindow, Notification, clipboard } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { execFile, spawn } from 'child_process'
+import { accessSync, constants, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { log, setLogFile, redactError } from './log'
 import { openDb } from './db/schema'
 import { Repo } from './db/repo'
@@ -21,6 +23,9 @@ import { createImapAccounts } from './imap/accounts'
 import { makeImapClient, parseMail } from './imap/client'
 import { notifyDraftsReady } from './notify'
 import { finalStatus } from './views'
+import { createUpdater, UPDATE_CHECK_EVERY_MS, UPDATE_CHECK_FIRST_MS } from './update/service'
+import { installMac } from './update/install-mac'
+import { installWin } from './update/install-win'
 import { CH, type RunResultView } from '@shared/ipc'
 
 let mainWindow: BrowserWindow | null = null
@@ -171,6 +176,75 @@ app.whenReady().then(() => {
     clearTimer: (id) => clearTimeout(id as NodeJS.Timeout)
   })
 
+  // ---- app updates (see docs/superpowers/specs/2026-11-20-app-updates-design.md)
+  const appVersion = app.getVersion()
+  const lastVersionFile = join(dataDir, 'last-version')
+  let justUpdated: string | null = null
+  try {
+    const last = readFileSync(lastVersionFile, 'utf8').trim()
+    if (last && last !== appVersion) {
+      justUpdated = appVersion
+      rmSync(join(dataDir, 'updates'), { recursive: true, force: true }) // downloaded installer is no longer needed
+      log.info('updated', { from: last, to: appVersion })
+    }
+  } catch {
+    // first start
+  }
+  try {
+    writeFileSync(lastVersionFile, appVersion, 'utf8')
+  } catch {
+    // not critical
+  }
+
+  const updater = createUpdater({
+    currentVersion: appVersion,
+    platform: process.platform,
+    arch: process.arch,
+    workRoot: join(dataDir, 'updates'),
+    fetch: (url, init) => fetch(url, init),
+    isBusy: () => scanner.isRunning(),
+    beforeInstall: () => {
+      scheduler.stop()
+      return () => scheduler.start()
+    },
+    install: async (file, version) => {
+      if (!app.isPackaged) throw new Error('Updates can only be installed in the installed app, not in development.')
+      if (process.platform === 'darwin') {
+        await installMac({
+          zipPath: file,
+          version,
+          execPath: process.execPath,
+          pid: process.pid,
+          workDir: dirname(file),
+          run: (cmd, args) =>
+            new Promise((resolve, reject) =>
+              execFile(cmd, args, (err, stdout) => (err ? reject(err) : resolve(String(stdout))))
+            ),
+          spawnDetached: (script) => spawn('/bin/sh', [script], { detached: true, stdio: 'ignore' }).unref(),
+          writeFile: (p, s) => {
+            mkdirSync(dirname(p), { recursive: true })
+            writeFileSync(p, s, { mode: 0o755 })
+          },
+          canWrite: (dir) => {
+            try {
+              accessSync(dir, constants.W_OK)
+              return true
+            } catch {
+              return false
+            }
+          }
+        })
+      } else if (process.platform === 'win32') {
+        installWin(file, (f, args) => spawn(f, args, { detached: true, stdio: 'ignore' }).unref())
+      } else {
+        throw new Error('Updates are not supported on this system.')
+      }
+    },
+    quit: () => app.quit(),
+    emit: (s) => send(win, CH.evUpdate, s),
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms))
+  })
+
   const ctx: AppContext = {
     dataDir,
     repo,
@@ -187,7 +261,10 @@ app.whenReady().then(() => {
     onSettingsChanged: () => scheduler.reschedule(),
     writeClipboard: (text) => clipboard.writeText(text),
     refreshBadge,
-    getCalendar: async (id) => calendarFor(await accounts.getAuth(id)) as unknown as CalendarLike
+    getCalendar: async (id) => calendarFor(await accounts.getAuth(id)) as unknown as CalendarLike,
+    updater,
+    appVersion,
+    justUpdated
   }
   registerIpc(ctx)
 
@@ -201,6 +278,8 @@ app.whenReady().then(() => {
         return
       }
       scheduler.start()
+      setTimeout(() => void updater.check(false), UPDATE_CHECK_FIRST_MS)
+      setInterval(() => void updater.check(false), UPDATE_CHECK_EVERY_MS)
     }
   }
   mainWindow = createWindow(onLoaded)

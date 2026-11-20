@@ -42,6 +42,12 @@ const api: Api = {
   usage: { summary: () => inv(CH.usageSummary) },
   scan: { runNow: (sinceMs) => inv(CH.scanRunNow, sinceMs) },
   calendar: { events: (s, e) => inv(CH.calendarEvents, s, e) },
+  update: {
+    state: () => inv(CH.updateState),
+    check: () => inv(CH.updateCheck),
+    install: () => inv(CH.updateInstall)
+  },
+  onUpdate: on(CH.evUpdate),
   onStatus: on(CH.evStatus),
   onBadge: on(CH.evBadge),
   onDataChanged: on(CH.evDataChanged)

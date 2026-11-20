@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import StatusBar from './components/StatusBar'
+import UpdateBanner from './components/UpdateBanner'
 import MailPage from './pages/Mail'
 import DraftsPage from './pages/Drafts'
 import CalendarPage from './pages/Calendar'
@@ -38,6 +39,7 @@ export default function App(): React.JSX.Element {
         ))}
       </nav>
       <main className="main">
+        <UpdateBanner />
         {page === 'mail' && <MailPage goTo={setPage} />}
         {page === 'drafts' && <DraftsPage />}
         {page === 'calendar' && <CalendarPage />}

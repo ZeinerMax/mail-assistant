@@ -13,6 +13,7 @@ import type { GmailLike } from './google/gmail'
 import { ImapSetupError, type ImapAccounts } from './imap/accounts'
 import { readConversation, readMessage } from './mailview'
 import { isNetworkError } from './jobs/scan'
+import type { Updater } from './update/service'
 import { MissingGoogleCredentials } from './google/oauth'
 import { buildDraftItems, buildMailItems } from './views'
 import { fetchEvents, type CalendarLike } from './google/calendar'
@@ -33,6 +34,10 @@ export interface AppContext {
   writeClipboard: (text: string) => void
   refreshBadge: () => void
   getCalendar: (accountId: number) => Promise<CalendarLike>
+  updater: Updater
+  appVersion: string
+  /** Set on the first start after an update. */
+  justUpdated: string | null
 }
 
 export const ANTHROPIC_KEY = 'anthropicKey'
@@ -199,6 +204,13 @@ export function registerIpc(ctx: AppContext): void {
     changed()
     ctx.refreshBadge()
     return r === 'ok' || r === 'exists' ? { ok: true } : { ok: false, error: DRAFT_ONE_TEXT[r] ?? DRAFT_ONE_TEXT.failed }
+  })
+
+  // ---- app updates
+  ipcMain.handle(CH.updateState, () => ({ state: ctx.updater.state(), current: ctx.appVersion, justUpdated: ctx.justUpdated }))
+  ipcMain.handle(CH.updateCheck, () => ctx.updater.check(true))
+  ipcMain.handle(CH.updateInstall, () => {
+    void ctx.updater.update()
   })
 
   // ---- calendar (read-only, in memory only)

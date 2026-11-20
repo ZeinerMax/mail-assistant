@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Settings } from '@shared/types'
-import type { UsageSummary } from '@shared/ipc'
+import type { UpdateState, UsageSummary } from '@shared/ipc'
 
 type Msg = { kind: 'ok' | 'err'; text: string } | null
 
@@ -218,6 +218,47 @@ function UsageCard(): React.JSX.Element {
   )
 }
 
+function UpdatesCard(): React.JSX.Element {
+  const [current, setCurrent] = useState('')
+  const [state, setState] = useState<UpdateState>({ phase: 'idle' })
+  useEffect(() => {
+    void window.api.update.state().then((i) => {
+      setCurrent(i.current)
+      setState(i.state)
+    })
+    return window.api.onUpdate(setState)
+  }, [])
+  const text = (): string | null => {
+    switch (state.phase) {
+      case 'checking':
+        return 'Checking…'
+      case 'uptodate':
+        return `You have the latest version (checked ${new Date(state.checkedAt).toLocaleTimeString()}).`
+      case 'available':
+        return `Version ${state.version} is available — use “Update and restart” at the top.`
+      case 'error':
+        return state.message
+      default:
+        return null
+    }
+  }
+  return (
+    <div className="card">
+      <h2>Updates</h2>
+      <p className="note">
+        You have version <strong>{current}</strong>. The app looks for new versions by itself when it starts and every 6
+        hours.
+      </p>
+      <div className="row">
+        <button className="btn" disabled={state.phase === 'checking' || state.phase === 'downloading'} onClick={() => void window.api.update.check().then(setState)}>
+          Check for updates
+        </button>
+        {text() && <span className={`note ${state.phase === 'error' ? 'err-text' : ''}`}>{text()}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage(): React.JSX.Element {
   return (
     <>
@@ -227,6 +268,7 @@ export default function SettingsPage(): React.JSX.Element {
       <ApiKeyCard />
       <UsageCard />
       <SettingsCard />
+      <UpdatesCard />
     </>
   )
 }
