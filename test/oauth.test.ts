@@ -40,10 +40,11 @@ function browser(fc: ReturnType<typeof fakeClient>, query: (state: string) => st
 }
 
 describe('google oauth', () => {
-  it('SCOPES equals the two readonly scopes exactly', () => {
+  it('SCOPES equals the two readonly scopes plus gmail.send exactly', () => {
     expect([...SCOPES]).toEqual([
       'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/calendar.readonly'
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/gmail.send'
     ])
   })
 

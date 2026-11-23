@@ -3,10 +3,11 @@ import { randomBytes } from 'crypto'
 import type { AddressInfo } from 'net'
 import { OAuth2Client, CodeChallengeMethod, type GenerateAuthUrlOpts, type GetTokenOptions } from 'google-auth-library'
 
-/** READ-ONLY. Never add other scopes (enforced by test/no-write-paths.test.ts and test/oauth.test.ts). */
+/** Read-only mail and calendar, plus gmail.send for replies. Never add other scopes (enforced by test/no-write-paths.test.ts and test/oauth.test.ts). */
 export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/calendar.readonly'
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/gmail.send'
 ] as const
 
 export class MissingGoogleCredentials extends Error {
