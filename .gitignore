@@ -14,3 +14,4 @@ settings.json
 *.log
 .DS_Store
 .eslintcache
+*.tsbuildinfo

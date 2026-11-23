@@ -5,12 +5,13 @@ import { getMessage, type GmailLike } from '../google/gmail'
 import { log, redactError } from '../log'
 import { buildReply, ReplyError } from './compose'
 import { buildMime } from './mime'
+import { SEND_PERMISSION_MISSING } from '@shared/messages'
 import { sendViaGmail, type GmailSendLike } from './gmail-send'
 import { sendViaSmtp, smtpErrorMessage, type SmtpTransportLike } from './smtp'
 
 export class SendPermissionMissing extends Error {
   constructor(public accountId: number) {
-    super('Sign in again to enable sending from this account.')
+    super(SEND_PERMISSION_MISSING)
     this.name = 'SendPermissionMissing'
   }
 }

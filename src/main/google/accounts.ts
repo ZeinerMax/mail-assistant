@@ -1,4 +1,5 @@
 import type { Account } from '@shared/types'
+import { RELOGIN_REQUIRED } from '@shared/messages'
 import type { Repo } from '../db/repo'
 import type { SecretStore } from '../secrets'
 
@@ -6,7 +7,7 @@ export const PALETTE = ['#2563eb', '#16a34a', '#d97706', '#db2777', '#7c3aed', '
 
 export class ReloginRequired extends Error {
   constructor(public accountId: number) {
-    super('This account needs you to sign in again.')
+    super(RELOGIN_REQUIRED)
     this.name = 'ReloginRequired'
   }
 }

@@ -51,8 +51,12 @@ export default function MailViewer({
   }, [onClose])
 
   const openReply = async (): Promise<void> => {
-    const d = (await window.api.drafts.list()).find((x) => x.emailId === item.id)
-    setReply(d?.body ?? '')
+    try {
+      const d = (await window.api.drafts.list()).find((x) => x.emailId === item.id)
+      setReply(d?.body ?? '')
+    } catch {
+      setReply('')
+    }
   }
 
   const count = mode === 'thread' && msgs ? msgs.length : item.threadSize

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-const RELOGIN_ERROR = 'Sign in again to enable sending from this account.'
+import { SEND_PERMISSION_MISSING, RELOGIN_REQUIRED } from '@shared/messages'
 
 /** Editable reply with debounced draft saving and a confirm step before anything is sent. */
 export default function ReplyBox({
@@ -12,13 +12,15 @@ export default function ReplyBox({
   emailId: number
   accountId: number
   initialText: string
-  onSent: () => void
+  onSent: (to: string) => void
 }): React.JSX.Element {
   const [text, setText] = useState(initialText)
   const [confirm, setConfirm] = useState<{ to: string; from: string } | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const [relogging, setRelogging] = useState(false)
 
   const latest = useRef(initialText)
   const saved = useRef(initialText)
@@ -62,9 +64,29 @@ export default function ReplyBox({
     else setError(r.error)
   }
 
+  const relogin = async (): Promise<void> => {
+    setRelogging(true)
+    setInfo(null)
+    try {
+      const r = await window.api.accounts.relogin(accountId)
+      if (r.ok) {
+        setError(null)
+        setInfo('Sending is enabled. Press Send… again.')
+      } else {
+        setError(r.error)
+      }
+    } catch {
+      setError('Could not sign in. Please try again.')
+    } finally {
+      setRelogging(false)
+    }
+  }
+
   const send = async (): Promise<void> => {
     setSending(true)
     setError(null)
+    setInfo(null)
+    const to = confirm?.to ?? ''
     const r = await window.api.reply.send(emailId, text)
     setSending(false)
     if (r.ok) {
@@ -72,7 +94,7 @@ export default function ReplyBox({
       if (timer.current) clearTimeout(timer.current)
       setConfirm(null)
       setSent(true)
-      sentTimer.current = setTimeout(() => onSentRef.current(), 1500)
+      sentTimer.current = setTimeout(() => onSentRef.current(to), 1500)
     } else {
       setConfirm(null)
       setError(r.error)
@@ -114,16 +136,17 @@ export default function ReplyBox({
       {error && (
         <div className="msg err">
           {error}
-          {error === RELOGIN_ERROR && (
+          {(error === SEND_PERMISSION_MISSING || error === RELOGIN_REQUIRED) && (
             <>
               {' '}
-              <button className="btn" onClick={() => void window.api.accounts.relogin(accountId)}>
-                Sign in again
+              <button className="btn" disabled={relogging} onClick={() => void relogin()}>
+                {relogging ? 'Waiting for sign-in…' : 'Sign in again'}
               </button>
             </>
           )}
         </div>
       )}
+      {info && !error && <div className="msg ok">{info}</div>}
     </div>
   )
 }

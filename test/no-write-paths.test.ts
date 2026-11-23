@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'fs'
 import { join, relative } from 'path'
 
-// Hard requirement: the app has NO code path that sends, deletes or changes email or calendar data,
-// and requests no scope beyond gmail.readonly + calendar.readonly.
+// Hard requirement: the only write the app performs is sending a reply the user confirmed, and that lives
+// only in the allowed send files. No code path deletes or changes email or calendar data.
+// Requested scopes: gmail.readonly, calendar.readonly, gmail.send.
 const FORBIDDEN: [string, RegExp][] = [
   ['gmail message write', /messages\s*\.\s*(modify|trash|untrash|delete|insert|import|batchModify|batchDelete)\b/],
   ['gmail thread write', /threads\s*\.\s*(modify|trash|untrash|delete)\b/],

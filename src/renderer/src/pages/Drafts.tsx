@@ -7,6 +7,7 @@ export default function DraftsPage(): React.JSX.Element {
   const [drafts, setDrafts] = useState<DraftItem[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => setDrafts(await window.api.drafts.list()), [])
   useEffect(() => {
@@ -15,6 +16,25 @@ export default function DraftsPage(): React.JSX.Element {
   }, [load])
 
   const current = drafts.find((d) => d.id === selected) ?? drafts[0]
+
+  // Pin the selection to what is actually shown, so new drafts arriving in the background never switch it.
+  useEffect(() => {
+    if (current && current.id !== selected) setSelected(current.id)
+  }, [current, selected])
+
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 6000)
+    return () => clearTimeout(t)
+  }, [notice])
+
+  const handleSent = (to: string): void => {
+    setNotice(`Reply sent to ${to}.`)
+    const i = drafts.findIndex((d) => d.id === current?.id)
+    const next = drafts[i + 1] ?? drafts[i - 1]
+    setSelected(next ? next.id : null)
+    void load()
+  }
 
   useEffect(() => {
     if (current && !current.seen) {
@@ -37,6 +57,14 @@ export default function DraftsPage(): React.JSX.Element {
       <p className="note" style={{ marginTop: -8, marginBottom: 16 }}>
         Edit a draft and send it from here, or copy it.
       </p>
+      {notice && (
+        <div className="msg ok" role="status" style={{ marginTop: 0, marginBottom: 16 }}>
+          {notice}{' '}
+          <button className="btn" onClick={() => setNotice(null)} aria-label="Dismiss">
+            Dismiss
+          </button>
+        </div>
+      )}
       {drafts.length === 0 || !current ? (
         <div className="empty">
           <div className="big">No drafts yet</div>
@@ -92,7 +120,7 @@ export default function DraftsPage(): React.JSX.Element {
               emailId={current.emailId}
               accountId={current.accountId}
               initialText={current.body}
-              onSent={() => void load()}
+              onSent={handleSent}
             />
             <p className="note" style={{ margin: 0 }}>
               Check anything in [brackets] before sending — those are details only you know.
