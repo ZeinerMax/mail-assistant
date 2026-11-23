@@ -38,7 +38,7 @@ describe('schema + repo', () => {
     const allowed = [
       'id', 'account_id', 'gmail_message_id', 'gmail_thread_id', 'received_at',
       'from_name', 'from_email', 'subject', 'tag', 'summary', 'state', 'attempts',
-      'answered', 'thread_size' // flags about the conversation, no text
+      'answered', 'thread_size', 'replied_at' // flags about the conversation, no text
     ]
     expect(cols.every((c) => allowed.includes(c))).toBe(true)
   })
@@ -109,5 +109,39 @@ describe('schema + repo', () => {
     expect(sum.find((u) => u.model === 'm-a')).toMatchObject({ inputTokens: 30, outputTokens: 10 })
     expect(sum.find((u) => u.model === 'm-a')!.costUsd).toBeCloseTo(0.3)
     expect(repo.usageSummary(Date.now() + 60_000)).toEqual([])
+  })
+
+  it('IMAP account smtp defaults from the imap host, can be set; Gmail has none', () => {
+    const g = repo.addAccount({ email: 'g@x.com', label: 'G', color: '#000', lastHistoryId: null })
+    expect(g.smtp).toBeNull()
+    const i = repo.addImapAccount({ email: 'a@seznam.cz', label: 'S', color: '#111', host: 'imap.seznam.cz', port: 993, user: 'a@seznam.cz' })
+    expect(i.smtp).toEqual({ host: 'smtp.seznam.cz', port: 465 })
+    repo.setSmtpSettings(i.id, { host: 'smtp.x.cz', port: 587 })
+    expect(repo.getAccount(i.id)!.smtp).toEqual({ host: 'smtp.x.cz', port: 587 })
+  })
+
+  it('markReplied sets repliedAt and answered', () => {
+    let t = 1000
+    const r = new Repo(db, () => t)
+    const a = r.addAccount({ email: 'a@x.com', label: 'A', color: '#000', lastHistoryId: null })
+    const id = r.insertEmailIfNew(email(a.id, 'm1'))!
+    expect(r.getEmail(id)).toMatchObject({ repliedAt: null, answered: false })
+    t = 2000
+    r.markReplied(id)
+    expect(r.getEmail(id)).toMatchObject({ repliedAt: 2000, answered: true })
+  })
+
+  it('saveDraftBody replaces an existing draft body or creates a seen draft', () => {
+    const a = repo.addAccount({ email: 'a@x.com', label: 'A', color: '#000', lastHistoryId: null })
+    const e1 = repo.insertEmailIfNew(email(a.id, 'm1'))!
+    const e2 = repo.insertEmailIfNew(email(a.id, 'm2'))!
+    const d = repo.addDraft(e1, 'old')
+    repo.saveDraftBody(e1, 'new')
+    expect(repo.getDraft(d)!.body).toBe('new')
+    expect(repo.listDrafts()).toHaveLength(1)
+    repo.saveDraftBody(e2, 'fresh')
+    const created = repo.listDrafts().find((x) => x.emailId === e2)!
+    expect(created.body).toBe('fresh')
+    expect(created.seenAt).not.toBeNull()
   })
 })

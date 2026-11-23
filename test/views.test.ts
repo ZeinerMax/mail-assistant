@@ -66,4 +66,13 @@ describe('views', () => {
     expect(s.message).toContain('Work needs sign-in')
     expect(s.message).toContain('limit')
   })
+
+  it('repliedAt passes through; replied email drops out of drafts', () => {
+    const { e1 } = seed()
+    expect(buildMailItems(repo, {}).find((m) => m.id === e1)!.repliedAt).toBeNull()
+    expect(buildDraftItems(repo)[0].repliedAt).toBeNull()
+    repo.markReplied(e1)
+    expect(buildMailItems(repo, {}).find((m) => m.id === e1)!.repliedAt).toBeTypeOf('number')
+    expect(buildDraftItems(repo)).toHaveLength(0)
+  })
 })

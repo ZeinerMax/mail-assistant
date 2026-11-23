@@ -126,7 +126,19 @@ export function createImapAccounts(deps: ImapAccountDeps) {
     })
   }
 
-  return { addAccount, setPassword, open, removeSecret: (id: number) => secrets.delete(imapKey(id)) }
+  function setSmtp(accountId: number, raw: unknown): Account {
+    const acc = repo.getAccount(accountId)
+    if (!acc?.imap) throw new ImapSetupError('Account not found.')
+    const r = (raw ?? {}) as Record<string, unknown>
+    const host = (typeof r.host === 'string' ? r.host.trim() : '').toLowerCase()
+    const port = Number(r.port)
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)) throw new ImapSetupError('Enter the outgoing (SMTP) server, e.g. smtp.example.com.')
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new ImapSetupError('Enter the outgoing port (usually 465 or 587).')
+    repo.setSmtpSettings(acc.id, { host, port })
+    return repo.getAccount(acc.id)!
+  }
+
+  return { addAccount, setPassword, setSmtp, open, removeSecret: (id: number) => secrets.delete(imapKey(id)) }
 }
 
 export type ImapAccounts = ReturnType<typeof createImapAccounts>

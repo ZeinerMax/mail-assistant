@@ -27,6 +27,7 @@ export function buildMailItems(repo: Repo, f: { tag?: Tag; accountId?: number })
       accountKind: a?.kind ?? 'gmail',
       answered: e.answered,
       threadSize: e.threadSize,
+      repliedAt: e.repliedAt,
       webUrl: a && a.kind === 'gmail' ? gmailWebUrl(a.email, e.gmailMessageId) : null
     }
   })
@@ -53,7 +54,8 @@ export function buildDraftItems(repo: Repo): DraftItem[] {
         body: d.body,
         createdAt: d.createdAt,
         seen: d.seenAt !== null,
-        copied: d.copiedAt !== null
+        copied: d.copiedAt !== null,
+        repliedAt: e.repliedAt
       }
     ]
   })

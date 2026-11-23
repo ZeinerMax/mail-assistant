@@ -39,6 +39,8 @@ export interface Account {
   kind: AccountKind
   /** IMAP server settings (no password); null for Gmail accounts. */
   imap: ImapSettings | null
+  /** Outgoing (SMTP) server for IMAP accounts (default derived from the IMAP host); null for Gmail. */
+  smtp: { host: string; port: number } | null
   email: string
   label: string
   color: string
@@ -70,6 +72,8 @@ export interface EmailRow extends NewEmail {
   answered: boolean
   /** Number of messages in the conversation, once known (null = not looked up yet). */
   threadSize: number | null
+  /** When a reply was sent from this app (null = never). */
+  repliedAt: number | null
 }
 
 export interface DraftRow {

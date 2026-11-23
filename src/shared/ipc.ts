@@ -55,6 +55,8 @@ export interface MailItem {
   answered: boolean
   /** Messages in the conversation, when known. */
   threadSize: number | null
+  /** When a reply was sent from this app (null = never). */
+  repliedAt: number | null
   /** Gmail web link (null for IMAP accounts, which have no web link). */
   webUrl: string | null
 }
@@ -95,6 +97,7 @@ export interface DraftItem {
   createdAt: number
   seen: boolean
   copied: boolean
+  repliedAt: number | null
 }
 
 export interface CalEvent {

@@ -1,6 +1,8 @@
 import type { Db } from './schema'
 import type { Account, AccountKind, AccountStatus, DraftRow, EmailRow, EmailState, NewEmail, Tag, UsageRow } from '@shared/types'
 
+import { defaultSmtp } from '../send/smtp'
+
 type Row = Record<string, unknown>
 
 const toAccount = (r: Row): Account => ({
@@ -9,6 +11,12 @@ const toAccount = (r: Row): Account => ({
   imap:
     r.kind === 'imap'
       ? { host: r.imap_host as string, port: r.imap_port as number, user: r.imap_user as string }
+      : null,
+  smtp:
+    r.kind === 'imap'
+      ? r.smtp_host
+        ? { host: r.smtp_host as string, port: r.smtp_port as number }
+        : defaultSmtp(r.imap_host as string)
       : null,
   email: r.email as string,
   label: r.label as string,
@@ -33,7 +41,8 @@ const toEmail = (r: Row): EmailRow => ({
   state: r.state as EmailState,
   attempts: r.attempts as number,
   answered: r.answered === 1,
-  threadSize: (r.thread_size as number | null) ?? null
+  threadSize: (r.thread_size as number | null) ?? null,
+  repliedAt: (r.replied_at as number | null) ?? null
 })
 
 const toDraft = (r: Row): DraftRow => ({
@@ -71,6 +80,9 @@ export class Repo {
   }
   setImapSettings(id: number, s: { host: string; port: number; user: string }): void {
     this.db.prepare('UPDATE accounts SET imap_host=?, imap_port=?, imap_user=? WHERE id=?').run(s.host, s.port, s.user, id)
+  }
+  setSmtpSettings(id: number, s: { host: string; port: number }): void {
+    this.db.prepare('UPDATE accounts SET smtp_host=?, smtp_port=? WHERE id=?').run(s.host, s.port, id)
   }
   getAccount(id: number): Account | null {
     const r = this.db.prepare('SELECT * FROM accounts WHERE id=?').get(id) as Row | undefined
@@ -134,6 +146,9 @@ export class Repo {
   setThreadInfo(emailId: number, t: { answered: boolean; size: number }): void {
     this.db.prepare('UPDATE emails SET answered=?, thread_size=? WHERE id=?').run(t.answered ? 1 : 0, t.size, emailId)
   }
+  markReplied(emailId: number): void {
+    this.db.prepare('UPDATE emails SET replied_at=?, answered=1 WHERE id=?').run(this.now(), emailId)
+  }
   markAttemptFailed(emailId: number): { attempts: number; state: EmailState } {
     this.db.prepare("UPDATE emails SET attempts=attempts+1, state='failed' WHERE id=?").run(emailId)
     const r = this.db.prepare('SELECT attempts,state FROM emails WHERE id=?').get(emailId) as Row
@@ -169,6 +184,14 @@ export class Repo {
       .prepare('INSERT INTO drafts (email_id, body, created_at) VALUES (?,?,?)')
       .run(emailId, body, this.now())
     return Number(info.lastInsertRowid)
+  }
+  /** Stores the user's edited reply: updates the email's draft, or creates one (already seen) if none exists. */
+  saveDraftBody(emailId: number, body: string): void {
+    const info = this.db.prepare('UPDATE drafts SET body=? WHERE email_id=?').run(body, emailId)
+    if (info.changes === 0)
+      this.db
+        .prepare('INSERT INTO drafts (email_id, body, created_at, seen_at) VALUES (?,?,?,?)')
+        .run(emailId, body, this.now(), this.now())
   }
   hasDraft(emailId: number): boolean {
     return !!this.db.prepare('SELECT 1 FROM drafts WHERE email_id=?').get(emailId)
