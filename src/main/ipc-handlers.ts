@@ -17,6 +17,8 @@ import type { Updater } from './update/service'
 import { MissingGoogleCredentials } from './google/oauth'
 import { buildDraftItems, buildMailItems } from './views'
 import { fetchEvents, type CalendarLike } from './google/calendar'
+import { ReplyError } from './send/compose'
+import { SendPermissionMissing, type ReplyService } from './send/service'
 
 export interface AppContext {
   dataDir: string
@@ -24,6 +26,7 @@ export interface AppContext {
   secrets: SecretStore
   accounts: AccountService<OAuth2Client>
   imap: ImapAccounts
+  reply: ReplyService
   /** A read-only mailbox (Gmail API or IMAP) for one account. */
   openMailbox: (accountId: number) => Promise<GmailLike>
   getWindow: () => BrowserWindow | null
@@ -41,6 +44,7 @@ export interface AppContext {
 }
 
 export const ANTHROPIC_KEY = 'anthropicKey'
+const MAX_TEXT = 100_000
 
 // Messages we wrote ourselves for the user; anything else is replaced by a generic text.
 const OWN_MESSAGES = /^(Sign-in|Google did not|You signed in as|This account|This build has no Google|Could not read the Gmail profile)/
@@ -51,7 +55,9 @@ export function friendlyError(e: unknown): string {
     e instanceof SecretStorageUnavailable ||
     e instanceof MissingGoogleCredentials ||
     e instanceof ImapSetupError ||
-    e instanceof ReloginRequired
+    e instanceof ReloginRequired ||
+    e instanceof ReplyError ||
+    e instanceof SendPermissionMissing
   )
     return e.message
   if (isNetworkError(e)) return 'Could not reach the mail server. Check your internet connection.'
@@ -150,6 +156,13 @@ export function registerIpc(ctx: AppContext): void {
       return a
     })
   )
+  ipcMain.handle(CH.accountsSetSmtp, (_e, id: number, raw: unknown) =>
+    wrap(() => {
+      const a = ctx.imap.setSmtp(id, raw)
+      changed()
+      return a
+    })
+  )
   ipcMain.handle(CH.accountsRemove, (_e, id: number) =>
     wrap(() => {
       ctx.imap.removeSecret(id)
@@ -205,6 +218,35 @@ export function registerIpc(ctx: AppContext): void {
     ctx.refreshBadge()
     return r === 'ok' || r === 'exists' ? { ok: true } : { ok: false, error: DRAFT_ONE_TEXT[r] ?? DRAFT_ONE_TEXT.failed }
   })
+
+  ipcMain.handle(CH.draftsSave, (_e, emailId: unknown, body: unknown) =>
+    wrap(() => {
+      if (!Number.isInteger(emailId)) throw new ReplyError('That email is no longer available.')
+      if (typeof body !== 'string' || body.length > MAX_TEXT) throw new ReplyError('That text is too long.')
+      ctx.repo.saveDraftBody(emailId as number, body)
+      changed()
+      ctx.refreshBadge()
+      return true as const
+    })
+  )
+
+  // ---- replies
+  ipcMain.handle(CH.replyPreview, (_e, emailId: unknown) =>
+    wrap(() => {
+      if (!Number.isInteger(emailId)) throw new ReplyError('That email is no longer available.')
+      return ctx.reply.preview(emailId as number)
+    })
+  )
+  ipcMain.handle(CH.replySend, (_e, emailId: unknown, text: unknown) =>
+    wrap(async () => {
+      if (!Number.isInteger(emailId)) throw new ReplyError('That email is no longer available.')
+      if (typeof text !== 'string' || text.length > MAX_TEXT) throw new ReplyError('That reply is too long.')
+      const r = await ctx.reply.send(emailId as number, text)
+      changed()
+      ctx.refreshBadge()
+      return r
+    })
+  )
 
   // ---- app updates
   ipcMain.handle(CH.updateState, () => ({ state: ctx.updater.state(), current: ctx.appVersion, justUpdated: ctx.justUpdated }))

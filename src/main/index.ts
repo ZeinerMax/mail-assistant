@@ -8,18 +8,21 @@ import { Repo } from './db/repo'
 import { createSecretStore } from './secrets'
 import { electronCipher } from './secrets-electron'
 import { registerIpc, send, emitStatus, ANTHROPIC_KEY, type AppContext } from './ipc-handlers'
-import { createAccountService } from './google/accounts'
+import { createAccountService, ReloginRequired } from './google/accounts'
 import { runLoopbackAuth, getClientCredentials } from './google/oauth'
 import { getProfile, makeAuth, gmailFor, calendarFor } from './google/clients'
 import type { CalendarLike } from './google/calendar'
 import type { GmailLike } from './google/gmail'
+import type { GmailSendLike } from './send/gmail-send'
 import { loadSettings } from './config'
 import { createAnthropic } from './ai/client'
 import { triage } from './ai/triage'
 import { buildDraftContext, draftReply } from './ai/draft'
 import { createScanner, type AiPort, type RunOptions, type RunResult } from './jobs/scan'
 import { createScheduler } from './jobs/scheduler'
-import { createImapAccounts } from './imap/accounts'
+import { createImapAccounts, imapKey } from './imap/accounts'
+import { createReplyService } from './send/service'
+import { makeSmtpTransport } from './send/smtp'
 import { makeImapClient, parseMail } from './imap/client'
 import { notifyDraftsReady } from './notify'
 import { finalStatus } from './views'
@@ -105,6 +108,17 @@ app.whenReady().then(() => {
     if (repo.getAccount(id)?.kind === 'imap') return imap.open(id)
     return gmailFor(await accounts.getAuth(id)) as unknown as GmailLike
   }
+
+  const reply = createReplyService({
+    repo,
+    openMailbox,
+    gmailSender: async (id) => gmailFor(await accounts.getAuth(id)) as unknown as GmailSendLike,
+    smtpFor: (a) => {
+      const password = secrets.get(imapKey(a.id))
+      if (!password || !a.smtp || !a.imap) throw new ReloginRequired(a.id)
+      return makeSmtpTransport({ ...a.smtp, user: a.imap.user }, password)
+    }
+  })
 
   /** Built per run so a new API key / settings apply immediately. Full email text stays inside these closures. */
   function aiPort(): AiPort | null {
@@ -264,6 +278,7 @@ app.whenReady().then(() => {
       if (scanner.isRunning()) return { status: 'already_running', stopReason: 'done', triaged: 0, drafted: 0 }
       return toView(await scheduler.runNow(sinceMs !== undefined ? { sinceMs } : undefined))
     },
+    reply,
     draftOne: (emailId) => scanner.draftOne(emailId),
     onSettingsChanged: () => scheduler.reschedule(),
     writeClipboard: (text) => clipboard.writeText(text),

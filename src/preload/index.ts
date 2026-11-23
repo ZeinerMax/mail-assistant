@@ -26,7 +26,8 @@ const api: Api = {
     remove: (id) => inv(CH.accountsRemove, id),
     rename: (id, label) => inv(CH.accountsRename, id, label),
     addImap: (form) => inv(CH.accountsAddImap, form),
-    setImapPassword: (id, password) => inv(CH.accountsImapPassword, id, password)
+    setImapPassword: (id, password) => inv(CH.accountsImapPassword, id, password),
+    setSmtp: (id, s) => inv(CH.accountsSetSmtp, id, s)
   },
   mail: {
     list: (f) => inv(CH.mailList, f),
@@ -37,8 +38,10 @@ const api: Api = {
     list: () => inv(CH.draftsList),
     markSeen: (id) => inv(CH.draftsMarkSeen, id),
     copy: (id) => inv(CH.draftsCopy, id),
-    create: (emailId) => inv(CH.draftsCreate, emailId)
+    create: (emailId) => inv(CH.draftsCreate, emailId),
+    save: (emailId, body) => inv(CH.draftsSave, emailId, body)
   },
+  reply: { preview: (id) => inv(CH.replyPreview, id), send: (id, text) => inv(CH.replySend, id, text) },
   usage: { summary: () => inv(CH.usageSummary) },
   scan: { runNow: (sinceMs) => inv(CH.scanRunNow, sinceMs) },
   calendar: { events: (s, e) => inv(CH.calendarEvents, s, e) },

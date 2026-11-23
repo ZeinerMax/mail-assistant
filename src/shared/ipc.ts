@@ -14,6 +14,7 @@ export const CH = {
   accountsRename: 'accounts:rename',
   accountsAddImap: 'accounts:addImap',
   accountsImapPassword: 'accounts:imapPassword',
+  accountsSetSmtp: 'accounts:setSmtp',
   mailList: 'mail:list',
   mailMessage: 'mail:message',
   mailThread: 'mail:thread',
@@ -21,6 +22,9 @@ export const CH = {
   draftsMarkSeen: 'drafts:markSeen',
   draftsCopy: 'drafts:copy',
   draftsCreate: 'drafts:create',
+  draftsSave: 'drafts:save',
+  replyPreview: 'reply:preview',
+  replySend: 'reply:send',
   usageSummary: 'usage:summary',
   scanRunNow: 'scan:runNow',
   calendarEvents: 'calendar:events',
@@ -128,6 +132,13 @@ export interface RunResultView {
   drafted: number
 }
 
+/** What a reply will look like before it is sent. */
+export interface ReplyPreview {
+  to: string
+  from: string
+  subject: string
+}
+
 export interface Api {
   settings: {
     get(): Promise<Settings>
@@ -148,6 +159,8 @@ export interface Api {
     addImap(form: ImapAccountForm): Promise<Result<Account>>
     /** New password for an IMAP account. */
     setImapPassword(id: number, password: string): Promise<Result<Account>>
+    /** Outgoing (SMTP) server of an IMAP account. */
+    setSmtp(id: number, s: { host: string; port: number }): Promise<Result<Account>>
   }
   mail: {
     list(filter: { tag?: Tag; accountId?: number }): Promise<MailItem[]>
@@ -162,6 +175,12 @@ export interface Api {
     copy(id: number): Promise<void>
     /** Manually write a draft for one email. */
     create(emailId: number): Promise<{ ok: boolean; error?: string }>
+    /** Save the user's edited draft text. */
+    save(emailId: number, body: string): Promise<Result<true>>
+  }
+  reply: {
+    preview(emailId: number): Promise<Result<ReplyPreview>>
+    send(emailId: number, text: string): Promise<Result<{ sentAt: number }>>
   }
   usage: { summary(): Promise<UsageSummary> }
   /** sinceMs: check all inbox mail received since then (otherwise only mail new since the last check). */
