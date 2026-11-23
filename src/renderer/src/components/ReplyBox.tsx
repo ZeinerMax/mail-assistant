@@ -26,7 +26,6 @@ export default function ReplyBox({
   const saved = useRef(initialText)
   const sentRef = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sentTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onSentRef = useRef(onSent)
   onSentRef.current = onSent
 
@@ -42,7 +41,6 @@ export default function ReplyBox({
   useEffect(
     () => () => {
       flush()
-      if (sentTimer.current) clearTimeout(sentTimer.current)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [emailId]
@@ -94,7 +92,8 @@ export default function ReplyBox({
       if (timer.current) clearTimeout(timer.current)
       setConfirm(null)
       setSent(true)
-      sentTimer.current = setTimeout(() => onSentRef.current(to), 1500)
+      // Report right away: the page reloads after a send and may unmount this box before any timer fires.
+      onSentRef.current(to)
     } else {
       setConfirm(null)
       setError(r.error)
