@@ -27,7 +27,7 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 - **Send** asks "Send to X from Y?" first. After sending, the email shows a **Replied** chip.
 - A reply always goes from the account that received the email, to the sender, with the right subject and threading headers. Gmail accounts put it in Sent automatically; for IMAP accounts no copy is saved to the Sent folder.
 - Not included: new email from scratch, syncing drafts to Gmail.
-- **Gmail:** uses the `gmail.send` scope. Existing accounts were signed in without it, so the first time you send from one, the app says "Sign in again to enable sending from this account." — click **Sign in again** once to grant it.
+- **Gmail:** uses the `gmail.send` scope. Existing accounts were signed in without it, so the first time you send from one, the app says "Sign in again to enable sending from this account. On Google's screen, make sure sending email is allowed." — click **Sign in again** once and leave the sending permission ticked. In Google Cloud, `gmail.send` must be added under Google Auth platform → Data Access.
 - **IMAP:** the account needs outgoing-server (SMTP) settings (Accounts page). Defaults: IMAP host `imap.x` becomes `smtp.x` (otherwise the same host), port `465` with TLS; any other port uses STARTTLS. Same user name and password as IMAP.
 - Status: covered by unit tests, typecheck and build; a real send has not been tested yet.
 
@@ -137,7 +137,8 @@ Windows: SmartScreen may say *"Windows protected your PC"* → **More info → R
 
 ```
 src/main/      config, secrets (safeStorage), log, db/ (schema, repo), google/ (oauth, accounts, gmail, calendar, clean),
-               ai/ (client, prompts, triage, draft, usage), jobs/ (scan, scheduler, status), notify, views, ipc-handlers, index
+               imap/ (accounts, client, source), send/ (compose, mime, gmail-send, smtp, service),
+               ai/ (client, prompts, triage, draft, usage), jobs/ (scan, scheduler, status), update/, notify, views, ipc-handlers, index
 src/preload/   narrow typed bridge (window.api)
 src/renderer/  React UI: Mail, Drafts, Calendar, Accounts, Settings, StatusBar
 src/shared/    types, IPC contract, status text formatting
@@ -153,4 +154,5 @@ Verified against installed library typings / official docs while building: Elect
 - The unsigned/ad-hoc-signed `.dmg` launching on Apple Silicon and Intel, the Keychain prompt, notifications and the dock badge.
 - The full Google sign-in and a real Gmail/Calendar/Anthropic round trip (no credentials were available while building — all of it is covered by unit tests with fakes).
 - Whether Google keeps allowing an unverified production app with `gmail.readonly` (see above).
+- Sending a real reply: Gmail (including the "Sign in again" step for an existing account and the 403 missing-permission detection) and IMAP/SMTP on ports 465 and 587. Covered only by unit tests with fakes.
 - Haiku 5.5 price above 100K-token prompts differs; our prompts are far below that. Prices are editable in Settings.
