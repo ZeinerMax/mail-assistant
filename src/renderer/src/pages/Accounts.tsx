@@ -54,8 +54,7 @@ export default function AccountsPage(): React.JSX.Element {
         </div>
       </div>
       <p className="note" style={{ marginTop: -8 }}>
-        Gmail sign-in happens in your web browser. Mail Assistant only <strong>reads</strong> your mail and calendar —
-        it can never send, change or delete anything. Other mailboxes (e.g. Webglobe) are opened read-only over IMAP.
+        Gmail sign-in happens in your web browser. Mail Assistant reads your mail and calendar, and sends a reply only after you confirm it. It never changes or deletes anything. Other mailboxes (e.g. Webglobe) are read over IMAP and send through their outgoing (SMTP) server.
       </p>
       {msg && <div className={`msg ${msg.kind}`}>{msg.text}</div>}
 
