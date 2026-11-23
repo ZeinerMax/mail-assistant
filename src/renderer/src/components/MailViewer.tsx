@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FullMessage, MailItem } from '@shared/ipc'
+import { relativeDay } from '@shared/format'
+import ReplyBox from './ReplyBox'
 
 export type ViewMode = 'message' | 'thread'
 
@@ -20,6 +22,7 @@ export default function MailViewer({
 }): React.JSX.Element {
   const [msgs, setMsgs] = useState<FullMessage[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reply, setReply] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -47,6 +50,11 @@ export default function MailViewer({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const openReply = async (): Promise<void> => {
+    const d = (await window.api.drafts.list()).find((x) => x.emailId === item.id)
+    setReply(d?.body ?? '')
+  }
+
   const count = mode === 'thread' && msgs ? msgs.length : item.threadSize
 
   return (
@@ -71,6 +79,15 @@ export default function MailViewer({
             Whole conversation{count && count > 1 ? <span className="n">{count}</span> : null}
           </button>
           <span className="grow" />
+          {item.repliedAt ? (
+            <span className="note">Replied {relativeDay(item.repliedAt)}</span>
+          ) : (
+            reply === null && (
+              <button className="btn" onClick={() => void openReply()}>
+                Reply
+              </button>
+            )
+          )}
           {item.webUrl && (
             <a className="link" href={item.webUrl} target="_blank" rel="noreferrer">
               Open in Gmail ↗
@@ -91,6 +108,15 @@ export default function MailViewer({
               <pre className="viewer-text">{m.text}</pre>
             </article>
           ))}
+          {reply !== null && !item.repliedAt && (
+            <ReplyBox
+              key={item.id}
+              emailId={item.id}
+              accountId={item.accountId}
+              initialText={reply}
+              onSent={() => setReply(null)}
+            />
+          )}
           {mode === 'thread' && msgs && msgs.length <= 1 && (
             <div className="note">This email is not part of a longer conversation.</div>
           )}

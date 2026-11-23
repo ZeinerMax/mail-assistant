@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DraftItem } from '@shared/ipc'
 import { relativeDay } from '@shared/format'
+import ReplyBox from '../components/ReplyBox'
 
 export default function DraftsPage(): React.JSX.Element {
   const [drafts, setDrafts] = useState<DraftItem[]>([])
@@ -34,7 +35,7 @@ export default function DraftsPage(): React.JSX.Element {
         <h1>Drafts</h1>
       </div>
       <p className="note" style={{ marginTop: -8, marginBottom: 16 }}>
-        Copy a draft and paste it into Gmail to send. Mail Assistant never sends email.
+        Edit a draft and send it from here, or copy it.
       </p>
       {drafts.length === 0 || !current ? (
         <div className="empty">
@@ -86,7 +87,13 @@ export default function DraftsPage(): React.JSX.Element {
                 <strong>Their email:</strong> {current.summary}
               </p>
             )}
-            <div className="draft-body">{current.body}</div>
+            <ReplyBox
+              key={current.emailId}
+              emailId={current.emailId}
+              accountId={current.accountId}
+              initialText={current.body}
+              onSent={() => void load()}
+            />
             <p className="note" style={{ margin: 0 }}>
               Check anything in [brackets] before sending — those are details only you know.
             </p>

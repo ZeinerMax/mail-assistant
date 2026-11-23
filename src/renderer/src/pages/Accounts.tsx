@@ -17,6 +17,7 @@ export default function AccountsPage(): React.JSX.Element {
   const [editing, setEditing] = useState<{ id: number; label: string } | null>(null)
   const [imapForm, setImapForm] = useState<ImapAccountForm | null>(null)
   const [pw, setPw] = useState<{ id: number; password: string } | null>(null)
+  const [smtp, setSmtp] = useState<{ id: number; host: string; port: number } | null>(null)
   const field = (k: keyof ImapAccountForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setImapForm((f) => (f ? { ...f, [k]: k === 'port' ? Number(e.target.value) : e.target.value } : f))
 
@@ -136,6 +137,45 @@ export default function AccountsPage(): React.JSX.Element {
                     {a.email}
                     {a.imap && ` · IMAP ${a.imap.host}:${a.imap.port}`}
                   </div>
+                  {a.kind === 'imap' && a.smtp && (
+                    <form
+                      className="row"
+                      style={{ marginTop: 6 }}
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        const cur = smtp?.id === a.id ? smtp : null
+                        if (!cur) return
+                        void run(
+                          () => window.api.accounts.setSmtp(a.id, { host: cur.host.trim(), port: cur.port }),
+                          'Outgoing server saved.'
+                        )
+                      }}
+                    >
+                      <label className="note" htmlFor={`smtp-host-${a.id}`}>
+                        Outgoing server
+                      </label>
+                      <input
+                        id={`smtp-host-${a.id}`}
+                        type="text"
+                        value={smtp?.id === a.id ? smtp.host : a.smtp.host}
+                        onChange={(e) =>
+                          setSmtp({ id: a.id, host: e.target.value, port: smtp?.id === a.id ? smtp.port : a.smtp!.port })
+                        }
+                      />
+                      <input
+                        type="number"
+                        aria-label="Outgoing port"
+                        style={{ width: 90 }}
+                        value={smtp?.id === a.id ? smtp.port : a.smtp.port}
+                        onChange={(e) =>
+                          setSmtp({ id: a.id, host: smtp?.id === a.id ? smtp.host : a.smtp!.host, port: Number(e.target.value) })
+                        }
+                      />
+                      <button className="btn" type="submit" disabled={busy || smtp?.id !== a.id}>
+                        Save
+                      </button>
+                    </form>
+                  )}
                   {pw?.id === a.id && (
                     <form
                       className="row"

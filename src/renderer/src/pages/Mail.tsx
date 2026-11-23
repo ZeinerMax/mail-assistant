@@ -203,7 +203,9 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
                   )
                 )}
               </div>
-              <div className="when">{relativeDay(m.receivedAt)}</div>
+              <div className="when">
+                {m.repliedAt && <span className="chip replied">Replied</span>} {relativeDay(m.receivedAt)}
+              </div>
               <div className="subj" style={{ gridColumn: '2 / 4' }}>
                 {m.subject}
               </div>
