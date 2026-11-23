@@ -16,7 +16,8 @@ const FORBIDDEN: [string, RegExp][] = [
   ['full gmail scope', /mail\.google\.com\/(?!mail\/\?authuser=)/],
   // IMAP: only connect/list/search/fetch/logout; never flags, moves, copies, deletes, appends or folder changes.
   ['imap write', /\.(messageFlagsAdd|messageFlagsSet|messageFlagsRemove|setFlagColor|messageDelete|messageMove|messageCopy|append|mailboxCreate|mailboxDelete|mailboxRename|mailboxSubscribe|mailboxUnsubscribe)\(/],
-  ['imap mailbox opened writable', /(getMailboxLock|mailboxOpen)\((?![^)]*readOnly:\s*true)[^)]*\)/]
+  ['imap mailbox opened writable', /(getMailboxLock|mailboxOpen)\((?![^)]*readOnly:\s*true)[^)]*\)/],
+  ['smtp library', /from ['"]smtp/]
 ]
 
 // Sending is allowed only in these files (paths relative to src, forward slashes).
@@ -75,6 +76,7 @@ describe('no write paths', () => {
     const hit = (code: string): boolean => FORBIDDEN.some(([, re]) => re.test(code))
     expect(hit("gmail.users.messages.modify({ userId: 'me' })")).toBe(true)
     expect(hit("client.append('Sent', raw)")).toBe(true)
+    expect(hit("import x from 'smtp-client'")).toBe(true)
     const send = readFileSync(join(__dirname, '..', 'src', 'main', 'send', 'gmail-send.ts'), 'utf8')
     expect(hit(send)).toBe(false)
   })
