@@ -188,10 +188,10 @@ export class Repo {
   /** Stores the user's edited reply: updates the email's draft, or creates one (already seen) if none exists. */
   saveDraftBody(emailId: number, body: string): void {
     const info = this.db.prepare('UPDATE drafts SET body=? WHERE email_id=?').run(body, emailId)
-    if (info.changes === 0)
-      this.db
-        .prepare('INSERT INTO drafts (email_id, body, created_at, seen_at) VALUES (?,?,?,?)')
-        .run(emailId, body, this.now(), this.now())
+    if (info.changes === 0) {
+      const t = this.now()
+      this.db.prepare('INSERT INTO drafts (email_id, body, created_at, seen_at) VALUES (?,?,?,?)').run(emailId, body, t, t)
+    }
   }
   hasDraft(emailId: number): boolean {
     return !!this.db.prepare('SELECT 1 FROM drafts WHERE email_id=?').get(emailId)

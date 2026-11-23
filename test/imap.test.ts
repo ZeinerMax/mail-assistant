@@ -226,6 +226,18 @@ describe('IMAP accounts', () => {
     expect(repo.listAccounts()).toHaveLength(0)
   })
 
+  it('setSmtp stores valid settings and rejects bad ones', async () => {
+    const { repo, svc } = setup()
+    const a = await svc.addAccount(form)
+    expect(svc.setSmtp(a.id, { host: 'smtp.x.cz', port: 587 }).smtp).toEqual({ host: 'smtp.x.cz', port: 587 })
+    expect(svc.setSmtp(a.id, { host: ' SMTP.X.CZ ', port: 465 }).smtp).toEqual({ host: 'smtp.x.cz', port: 465 })
+    expect(() => svc.setSmtp(a.id, { host: 'bad', port: 0 })).toThrow(ImapSetupError)
+    expect(() => svc.setSmtp(a.id, { host: 'smtp.x.cz', port: 0 })).toThrow('outgoing port')
+    expect(() => svc.setSmtp(999, { host: 'smtp.x.cz', port: 587 })).toThrow('Account not found.')
+    const g = repo.addAccount({ email: 'g@x.com', label: 'G', color: '#000', lastHistoryId: null })
+    expect(() => svc.setSmtp(g.id, { host: 'smtp.x.cz', port: 587 })).toThrow('Account not found.')
+  })
+
   it('missing password → needs sign-in', async () => {
     const { repo, secrets, svc } = setup()
     const a = await svc.addAccount(form)
