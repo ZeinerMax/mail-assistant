@@ -33,6 +33,7 @@ export async function parseMail(source: Buffer): Promise<ParsedLike> {
     messageId: p.messageId,
     inReplyTo: p.inReplyTo,
     references: p.references,
+    replyTo: p.replyTo ? { text: p.replyTo.text } : undefined,
     text: p.text,
     html: p.html
   }

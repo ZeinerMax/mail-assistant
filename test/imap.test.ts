@@ -235,6 +235,17 @@ describe('IMAP accounts', () => {
   })
 })
 
+describe('toGmailMessage reply headers', () => {
+  it('exposes References, In-Reply-To and Reply-To', async () => {
+    const { toGmailMessage } = await import('../src/main/imap/source')
+    const m = toGmailMessage('1', { references: ['<a@x>', '<b@x>'], inReplyTo: '<b@x>', replyTo: { text: 'r@x.cz' } }, { labels: [], internalDate: 1 })
+    const h = Object.fromEntries((m.payload?.headers ?? []).map((x) => [x.name, x.value]))
+    expect(h['References']).toBe('<a@x> <b@x>')
+    expect(h['In-Reply-To']).toBe('<b@x>')
+    expect(h['Reply-To']).toBe('r@x.cz')
+  })
+})
+
 describe('parseMail (real mailparser)', () => {
   it('reads headers, Czech text and references from a raw message', async () => {
     const { parseMail } = await import('../src/main/imap/client')

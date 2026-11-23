@@ -41,6 +41,7 @@ export interface ParsedLike {
   messageId?: string
   inReplyTo?: string
   references?: string | string[]
+  replyTo?: { text?: string }
   text?: string
   html?: string | false
 }
@@ -64,12 +65,16 @@ export function toGmailMessage(
   const f = p.from?.value?.[0]
   const from = f ? (f.name ? `${f.name} <${f.address ?? ''}>` : (f.address ?? '')) : ''
   const to = Array.isArray(p.to) ? p.to.map((t) => t.text ?? '').join(', ') : (p.to?.text ?? '')
+  const refs = Array.isArray(p.references) ? p.references : p.references ? p.references.split(/\s+/) : []
   const headers = [
     { name: 'From', value: from },
     { name: 'To', value: to },
     { name: 'Subject', value: p.subject ?? '' },
     { name: 'Date', value: p.date ? p.date.toUTCString() : '' },
-    { name: 'Message-ID', value: p.messageId ?? '' }
+    { name: 'Message-ID', value: p.messageId ?? '' },
+    { name: 'In-Reply-To', value: p.inReplyTo ?? '' },
+    { name: 'References', value: refs.join(' ') },
+    { name: 'Reply-To', value: p.replyTo?.text ?? '' }
   ]
   const parts: gmail_v1.Schema$MessagePart[] = []
   if (p.text) parts.push({ mimeType: 'text/plain', body: { data: b64(p.text) } })
