@@ -1,8 +1,8 @@
 # Mail Assistant
 
-A private desktop app (macOS + Windows) that reads up to a few Gmail accounts **read-only**, summarizes and tags new mail with Claude Haiku, writes reply drafts with Claude Sonnet for mail that needs an answer, and shows all calendars in one view.
+A private desktop app (macOS + Windows) that reads up to a few Gmail accounts, summarizes and tags new mail with Claude Haiku, writes reply drafts with Claude Sonnet for mail that needs an answer, lets you **send a reply** from the app, and shows all calendars in one view.
 
-**It never sends, deletes or changes email or calendar events.** You copy a draft and paste it into Gmail yourself.
+**It never deletes, moves or labels email and never changes calendar events.** The only thing it writes is a reply that you read, edit and confirm yourself (see [Sending replies](#sending-replies)). There is no "new email from scratch".
 
 How the app was designed and built (process, decisions, Google Cloud setup, problems solved): see [HOW_IT_WAS_BUILT.md](HOW_IT_WAS_BUILT.md).
 
@@ -10,8 +10,8 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 |---|---|
 | Stack | Electron 45 · React 19 · TypeScript · electron-vite · better-sqlite3 · electron-builder |
 | AI | `claude-haiku-5-5` (summary + tag) · `claude-sonnet-5-5` (drafts, adaptive thinking, effort `medium`) — changeable in Settings |
-| Google scopes | `gmail.readonly`, `calendar.readonly` — nothing else |
-| Other mailboxes | IMAP (e.g. Webglobe), every folder opened **read-only** (`EXAMINE`) — mail isn't even marked as read |
+| Google scopes | `gmail.readonly`, `calendar.readonly`, `gmail.send` — nothing else |
+| Other mailboxes | IMAP (e.g. Webglobe), every folder opened **read-only** (`EXAMINE`) — mail isn't even marked as read; replies go out through SMTP |
 
 ## Other mailboxes (IMAP, e.g. Webglobe)
 
@@ -20,6 +20,16 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 - New mail is found by IMAP UID (`UIDVALIDITY:last UID` cursor); "Check from this time" searches by date.
 - A conversation is built from the `References` / `In-Reply-To` headers across INBOX and the Sent folder.
 - No calendar for IMAP accounts. No web links either (IMAP has none), so "Open email" / "Whole conversation" show the text inside the app.
+
+## Sending replies
+
+- **Reply** button in the email viewer, and an editable reply box on the **Drafts** page (pre-filled with the AI draft). Edits to a draft are kept.
+- **Send** asks "Send to X from Y?" first. After sending, the email shows a **Replied** chip.
+- A reply always goes from the account that received the email, to the sender, with the right subject and threading headers. Gmail accounts put it in Sent automatically; for IMAP accounts no copy is saved to the Sent folder.
+- Not included: new email from scratch, syncing drafts to Gmail.
+- **Gmail:** uses the `gmail.send` scope. Existing accounts were signed in without it, so the first time you send from one, the app says "Sign in again to enable sending from this account." — click **Sign in again** once to grant it.
+- **IMAP:** the account needs outgoing-server (SMTP) settings (Accounts page). Defaults: IMAP host `imap.x` becomes `smtp.x` (otherwise the same host), port `465` with TLS; any other port uses STARTTLS. Same user name and password as IMAP.
+- Status: covered by unit tests, typecheck and build; a real send has not been tested yet.
 
 ## Reading mail, links and "already answered"
 
@@ -43,7 +53,7 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 2. **Enable the APIs** — *APIs & Services → Library*: enable **Gmail API** and **Google Calendar API**.
 3. **Google Auth platform** (OAuth consent screen) — *Menu → Google Auth platform*:
    1. **Get Started** → App name "Mail Assistant", your support email → Audience **External** → contact email → accept the policy → **Create**.
-   2. **Data Access → Add or Remove Scopes** → add `https://www.googleapis.com/auth/gmail.readonly` and `https://www.googleapis.com/auth/calendar.readonly` → **Save**.
+   2. **Data Access → Add or Remove Scopes** → add `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/calendar.readonly` and `https://www.googleapis.com/auth/gmail.send` → **Save**.
    3. **Audience → Test users → Add users**: add every Gmail address that will use the app.
 4. **Create the client** — *Google Auth platform → Clients → Create Client* → Application type **Desktop app** → name it → **Create**. **Copy the client ID and secret now** (the secret is shown only once).
 5. **Publish to production** — *Audience* → **Publish app**.
@@ -63,7 +73,7 @@ cd Mail_assistant
 copy .env.example .env      # then put the Google client ID + secret into .env
 npm install
 npm run dev                  # starts the app with hot reload
-npm test                     # ~140 unit tests (run inside Electron's Node)
+npm test                     # ~250 unit tests (run inside Electron's Node)
 npm run build                # typecheck + production build into out/
 ```
 
@@ -131,7 +141,7 @@ src/main/      config, secrets (safeStorage), log, db/ (schema, repo), google/ (
 src/preload/   narrow typed bridge (window.api)
 src/renderer/  React UI: Mail, Drafts, Calendar, Accounts, Settings, StatusBar
 src/shared/    types, IPC contract, status text formatting
-test/          vitest unit tests (incl. a guard that fails if any Gmail/Calendar write call or extra scope appears)
+test/          vitest unit tests (incl. a guard that fails if any Gmail/Calendar write call other than sending, or any extra scope, appears)
 docs/superpowers/  design spec and implementation plan
 ```
 

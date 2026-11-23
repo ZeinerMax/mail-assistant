@@ -10,6 +10,8 @@ A private desktop app for **one family member** (on macOS; developed and tested 
 
 ## 2. Goals, non-goals, anti-goals
 
+> **Update 2026-11-23:** the read-only rule below was replaced for replies: the app can now send a reply you confirm, using the extra scope `gmail.send` (and SMTP for IMAP accounts). See `2026-11-23-send-replies-design.md`. Deleting, moving and labelling stay out of scope.
+
 **Goals**
 - Read-only access to Gmail and Calendar for 3–4 accounts.
 - Haiku: a summary and a tag (`needs_reply` / `info` / `newsletter_junk`) for each new email.

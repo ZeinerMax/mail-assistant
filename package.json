@@ -3,7 +3,7 @@
   "productName": "Mail Assistant",
   "version": "0.2.2",
   "private": true,
-  "description": "Personal read-only mail summaries and reply drafts for Gmail",
+  "description": "Personal mail summaries, reply drafts and replies for Gmail and IMAP",
   "main": "./out/main/index.js",
   "author": "Mail Assistant",
   "scripts": {
