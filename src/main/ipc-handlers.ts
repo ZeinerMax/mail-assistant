@@ -19,6 +19,7 @@ import { buildDraftItems, buildMailItems } from './views'
 import { fetchEvents, type CalendarLike } from './google/calendar'
 import { ReplyError } from './send/compose'
 import { SendPermissionMissing, type ReplyService } from './send/service'
+import type { UnsubscribeService } from './unsubscribe/service'
 
 export interface AppContext {
   dataDir: string
@@ -27,6 +28,7 @@ export interface AppContext {
   accounts: AccountService<OAuth2Client>
   imap: ImapAccounts
   reply: ReplyService
+  unsubscribe: UnsubscribeService
   /** A read-only mailbox (Gmail API or IMAP) for one account. */
   openMailbox: (accountId: number) => Promise<GmailLike>
   getWindow: () => BrowserWindow | null
@@ -183,7 +185,22 @@ export function registerIpc(ctx: AppContext): void {
   )
 
   // ---- mail + drafts
-  ipcMain.handle(CH.mailList, (_e, f: { tag?: Tag; accountId?: number }) => buildMailItems(ctx.repo, f ?? {}))
+  ipcMain.handle(CH.mailList, (_e, f: { tag?: Tag; accountId?: number; view?: 'active' | 'done' }) => buildMailItems(ctx.repo, f ?? {}))
+  ipcMain.handle(CH.mailSetFinished, (_e, emailId: unknown, finished: unknown) => {
+    if (!Number.isInteger(emailId)) return
+    ctx.repo.setFinished(emailId as number, finished === true)
+    changed()
+    ctx.refreshBadge()
+  })
+  ipcMain.handle(CH.mailUnsubscribe, (_e, emailId: unknown) =>
+    wrap(async () => {
+      if (!Number.isInteger(emailId)) throw new ReplyError('That email is no longer available.')
+      const r = await ctx.unsubscribe.unsubscribe(emailId as number)
+      changed()
+      ctx.refreshBadge()
+      return r
+    })
+  )
   const withEmail = <T>(emailId: number, fn: (g: GmailLike, owner: string | undefined) => Promise<T>): Promise<Result<T>> =>
     wrap(async () => {
       const e = ctx.repo.getEmail(emailId)

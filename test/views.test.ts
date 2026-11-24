@@ -67,12 +67,25 @@ describe('views', () => {
     expect(s.message).toContain('limit')
   })
 
-  it('repliedAt passes through; replied email drops out of drafts', () => {
+  it('repliedAt passes through; replied email leaves the active list and drops out of drafts', () => {
     const { e1 } = seed()
     expect(buildMailItems(repo, {}).find((m) => m.id === e1)!.repliedAt).toBeNull()
     expect(buildDraftItems(repo)[0].repliedAt).toBeNull()
     repo.markReplied(e1)
-    expect(buildMailItems(repo, {}).find((m) => m.id === e1)!.repliedAt).toBeTypeOf('number')
+    // Answered mail is hidden from the active list and shown under the "done" view.
+    expect(buildMailItems(repo, {}).find((m) => m.id === e1)).toBeUndefined()
+    expect(buildMailItems(repo, { view: 'done' }).find((m) => m.id === e1)!.repliedAt).toBeTypeOf('number')
     expect(buildDraftItems(repo)).toHaveLength(0)
+  })
+
+  it('finished mail is hidden from the active list and shown under "done"', () => {
+    const { e1 } = seed()
+    expect(buildMailItems(repo, {}).find((m) => m.id === e1)!.finished).toBe(false)
+    repo.setFinished(e1, true)
+    expect(buildMailItems(repo, {}).find((m) => m.id === e1)).toBeUndefined()
+    const done = buildMailItems(repo, { view: 'done' }).find((m) => m.id === e1)!
+    expect(done.finished).toBe(true)
+    repo.setFinished(e1, false)
+    expect(buildMailItems(repo, {}).find((m) => m.id === e1)!.finished).toBe(false)
   })
 })

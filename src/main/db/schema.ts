@@ -70,6 +70,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE accounts ADD COLUMN smtp_host TEXT;
   ALTER TABLE accounts ADD COLUMN smtp_port INTEGER;
   ALTER TABLE emails ADD COLUMN replied_at INTEGER;
+  `,
+  `
+  ALTER TABLE emails ADD COLUMN finished INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE emails ADD COLUMN finished_at INTEGER;
   `
 ]
 

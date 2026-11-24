@@ -11,3 +11,9 @@ export async function buildMime(from: string, r: Reply): Promise<Buffer> {
   const mail = new MailComposer({ from: clean(from), to: clean(r.to), subject: clean(r.subject), text: r.text, headers })
   return mail.compile().build()
 }
+
+/** A one-off plain-text message (e.g. a mailto unsubscribe); not part of any thread. */
+export async function buildSimpleMime(m: { from: string; to: string; subject: string; text: string }): Promise<Buffer> {
+  const mail = new MailComposer({ from: clean(m.from), to: clean(m.to), subject: clean(m.subject), text: m.text })
+  return mail.compile().build()
+}

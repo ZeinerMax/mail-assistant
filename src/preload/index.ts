@@ -32,7 +32,9 @@ const api: Api = {
   mail: {
     list: (f) => inv(CH.mailList, f),
     message: (id) => inv(CH.mailMessage, id),
-    thread: (id) => inv(CH.mailThread, id)
+    thread: (id) => inv(CH.mailThread, id),
+    setFinished: (id, finished) => inv(CH.mailSetFinished, id, finished),
+    unsubscribe: (id) => inv(CH.mailUnsubscribe, id)
   },
   drafts: {
     list: () => inv(CH.draftsList),

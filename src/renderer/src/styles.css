@@ -170,3 +170,14 @@ label.since { display: inline-flex; align-items: center; gap: 6px; color: var(--
 .err-text { color: var(--danger); }
 .reply-box textarea { width: 100%; box-sizing: border-box; font: inherit; line-height: 1.55; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
 .chip.replied { cursor: default; font-size: 12px; padding: 2px 9px; }
+
+/* compact buttons used for inline actions; anchors styled as buttons too */
+.btn.sm { padding: 4px 10px; font-size: 13px; border-radius: 7px; }
+a.btn { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+a.btn:hover { background: var(--bg); }
+/* done mail + the "mark done" checkbox */
+.mail.done { opacity: 0.55; }
+.mail.done .subj { text-decoration: line-through; }
+.done-check { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); cursor: pointer; margin-left: auto; }
+.done-check input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.viewer-body .reply-box { margin-bottom: 6px; }

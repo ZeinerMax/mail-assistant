@@ -14,6 +14,7 @@ import { getProfile, makeAuth, gmailFor, calendarFor } from './google/clients'
 import type { CalendarLike } from './google/calendar'
 import type { GmailLike } from './google/gmail'
 import type { GmailSendLike } from './send/gmail-send'
+import type { Account } from '@shared/types'
 import { loadSettings } from './config'
 import { createAnthropic } from './ai/client'
 import { triage } from './ai/triage'
@@ -23,6 +24,8 @@ import { createScheduler } from './jobs/scheduler'
 import { createImapAccounts, imapKey } from './imap/accounts'
 import { createReplyService } from './send/service'
 import { makeSmtpTransport } from './send/smtp'
+import { createUnsubscribeService } from './unsubscribe/service'
+import { makeUnsubscribeFinder } from './unsubscribe/find'
 import { makeImapClient, parseMail } from './imap/client'
 import { notifyDraftsReady } from './notify'
 import { finalStatus } from './views'
@@ -109,14 +112,26 @@ app.whenReady().then(() => {
     return gmailFor(await accounts.getAuth(id)) as unknown as GmailLike
   }
 
-  const reply = createReplyService({
+  const gmailSender = async (id: number): Promise<GmailSendLike> =>
+    gmailFor(await accounts.getAuth(id)) as unknown as GmailSendLike
+  const smtpFor = (a: Account): ReturnType<typeof makeSmtpTransport> => {
+    const password = secrets.get(imapKey(a.id))
+    if (!password || !a.smtp || !a.imap) throw new ReloginRequired(a.id)
+    return makeSmtpTransport({ ...a.smtp, user: a.imap.user }, password)
+  }
+
+  const reply = createReplyService({ repo, openMailbox, gmailSender, smtpFor })
+
+  const unsubscribe = createUnsubscribeService({
     repo,
     openMailbox,
-    gmailSender: async (id) => gmailFor(await accounts.getAuth(id)) as unknown as GmailSendLike,
-    smtpFor: (a) => {
-      const password = secrets.get(imapKey(a.id))
-      if (!password || !a.smtp || !a.imap) throw new ReloginRequired(a.id)
-      return makeSmtpTransport({ ...a.smtp, user: a.imap.user }, password)
+    gmailSender,
+    smtpFor,
+    // Haiku (triage model) only kicks in when a newsletter has no List-Unsubscribe header.
+    finder: async (body) => {
+      const key = secrets.get(ANTHROPIC_KEY)
+      if (!key) return null
+      return makeUnsubscribeFinder(createAnthropic(key), loadSettings(dataDir).triageModel)(body)
     }
   })
 
@@ -279,6 +294,7 @@ app.whenReady().then(() => {
       return toView(await scheduler.runNow(sinceMs !== undefined ? { sinceMs } : undefined))
     },
     reply,
+    unsubscribe,
     draftOne: (emailId) => scanner.draftOne(emailId),
     onSettingsChanged: () => scheduler.reschedule(),
     writeClipboard: (text) => clipboard.writeText(text),

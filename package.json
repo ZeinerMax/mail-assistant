@@ -1,7 +1,7 @@
 {
   "name": "mail-assistant",
   "productName": "Mail Assistant",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "Personal mail summaries, reply drafts and replies for Gmail and IMAP",
   "main": "./out/main/index.js",

@@ -18,6 +18,8 @@ export const CH = {
   mailList: 'mail:list',
   mailMessage: 'mail:message',
   mailThread: 'mail:thread',
+  mailSetFinished: 'mail:setFinished',
+  mailUnsubscribe: 'mail:unsubscribe',
   draftsList: 'drafts:list',
   draftsMarkSeen: 'drafts:markSeen',
   draftsCopy: 'drafts:copy',
@@ -61,6 +63,8 @@ export interface MailItem {
   threadSize: number | null
   /** When a reply was sent from this app (null = never). */
   repliedAt: number | null
+  /** The user marked this email done by hand (no reply needed). */
+  finished: boolean
   /** Gmail web link (null for IMAP accounts, which have no web link). */
   webUrl: string | null
 }
@@ -139,6 +143,14 @@ export interface ReplyPreview {
   subject: string
 }
 
+/** Outcome of unsubscribing from a newsletter. */
+export interface UnsubscribeResult {
+  /** one-click: RFC 8058 POST · email: sent an unsubscribe email · web: contacted a link · web-ai: link found by the model. */
+  method: 'one-click' | 'email' | 'web' | 'web-ai'
+  /** The address emailed or the URL contacted. */
+  target: string
+}
+
 export interface Api {
   settings: {
     get(): Promise<Settings>
@@ -163,11 +175,16 @@ export interface Api {
     setSmtp(id: number, s: { host: string; port: number }): Promise<Result<Account>>
   }
   mail: {
-    list(filter: { tag?: Tag; accountId?: number }): Promise<MailItem[]>
+    /** view 'done' lists finished/already-answered mail; otherwise the active list hides it. */
+    list(filter: { tag?: Tag; accountId?: number; view?: 'active' | 'done' }): Promise<MailItem[]>
     /** The whole email, fetched live. */
     message(emailId: number): Promise<Result<FullMessage>>
     /** The whole conversation, oldest first, fetched live. */
     thread(emailId: number): Promise<Result<FullMessage[]>>
+    /** Mark an email done by hand (or clear it). */
+    setFinished(emailId: number, finished: boolean): Promise<void>
+    /** Unsubscribe from a newsletter/junk email (automatic; marks it done on success). */
+    unsubscribe(emailId: number): Promise<Result<UnsubscribeResult>>
   }
   drafts: {
     list(): Promise<DraftItem[]>

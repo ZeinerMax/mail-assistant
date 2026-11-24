@@ -42,7 +42,8 @@ const toEmail = (r: Row): EmailRow => ({
   attempts: r.attempts as number,
   answered: r.answered === 1,
   threadSize: (r.thread_size as number | null) ?? null,
-  repliedAt: (r.replied_at as number | null) ?? null
+  repliedAt: (r.replied_at as number | null) ?? null,
+  finished: r.finished === 1
 })
 
 const toDraft = (r: Row): DraftRow => ({
@@ -137,7 +138,7 @@ export class Repo {
     return (
       this.db
         .prepare(
-          "SELECT * FROM emails WHERE tag='needs_reply' AND answered=0 AND received_at>=? ORDER BY received_at DESC LIMIT ?"
+          "SELECT * FROM emails WHERE tag='needs_reply' AND answered=0 AND finished=0 AND received_at>=? ORDER BY received_at DESC LIMIT ?"
         )
         .all(sinceMs, limit) as Row[]
     ).map(toEmail)
@@ -148,6 +149,10 @@ export class Repo {
   }
   markReplied(emailId: number): void {
     this.db.prepare('UPDATE emails SET replied_at=?, answered=1 WHERE id=?').run(this.now(), emailId)
+  }
+  /** Mark an email done by hand (or clear that). "Done" mail is hidden from the active list. */
+  setFinished(emailId: number, finished: boolean): void {
+    this.db.prepare('UPDATE emails SET finished=?, finished_at=? WHERE id=?').run(finished ? 1 : 0, finished ? this.now() : null, emailId)
   }
   markAttemptFailed(emailId: number): { attempts: number; state: EmailState } {
     this.db.prepare("UPDATE emails SET attempts=attempts+1, state='failed' WHERE id=?").run(emailId)
@@ -163,7 +168,11 @@ export class Repo {
         .all(accountId, MAX_ATTEMPTS) as Row[]
     ).map(toEmail)
   }
-  listEmails(f: { tag?: Tag; accountId?: number; limit: number }): EmailRow[] {
+  /**
+   * f.view 'active' (default) hides done mail (finished by hand or already answered);
+   * 'done' shows only that mail. 'all' applies no done/answered filter.
+   */
+  listEmails(f: { tag?: Tag; accountId?: number; limit: number; view?: 'active' | 'done' | 'all' }): EmailRow[] {
     const where: string[] = []
     const args: unknown[] = []
     if (f.tag) {
@@ -174,6 +183,8 @@ export class Repo {
       where.push('account_id=?')
       args.push(f.accountId)
     }
+    if (f.view === 'done') where.push('(finished=1 OR answered=1)')
+    else if (f.view !== 'all') where.push('finished=0 AND answered=0')
     const sql = `SELECT * FROM emails ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY received_at DESC LIMIT ?`
     return (this.db.prepare(sql).all(...args, f.limit) as Row[]).map(toEmail)
   }

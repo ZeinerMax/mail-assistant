@@ -38,7 +38,8 @@ describe('schema + repo', () => {
     const allowed = [
       'id', 'account_id', 'gmail_message_id', 'gmail_thread_id', 'received_at',
       'from_name', 'from_email', 'subject', 'tag', 'summary', 'state', 'attempts',
-      'answered', 'thread_size', 'replied_at' // flags about the conversation, no text
+      'answered', 'thread_size', 'replied_at', // flags about the conversation, no text
+      'finished', 'finished_at' // user marked it done by hand, no text
     ]
     expect(cols.every((c) => allowed.includes(c))).toBe(true)
   })

@@ -74,6 +74,8 @@ export interface EmailRow extends NewEmail {
   threadSize: number | null
   /** When a reply was sent from this app (null = never). */
   repliedAt: number | null
+  /** The user marked this email done by hand (no reply needed). */
+  finished: boolean
 }
 
 export interface DraftRow {

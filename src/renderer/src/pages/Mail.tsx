@@ -6,12 +6,12 @@ import type { Page } from '../App'
 import MailViewer, { type ViewMode } from '../components/MailViewer'
 
 const TAG_LABEL: Record<Tag, string> = {
-  needs_reply: 'Needs reply',
+  needs_reply: 'Important',
   info: 'Info',
   newsletter_junk: 'Newsletter / junk'
 }
 
-type Filter = Tag | 'all'
+type Filter = Tag | 'all' | 'done'
 
 const pad = (n: number): string => String(n).padStart(2, '0')
 /** Local time as the value of <input type="datetime-local" step="1"> (YYYY-MM-DDTHH:MM:SS). */
@@ -25,6 +25,7 @@ const startOfToday = (): string => {
 
 export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.JSX.Element {
   const [items, setItems] = useState<MailItem[]>([])
+  const [doneItems, setDoneItems] = useState<MailItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [filter, setFilter] = useState<Filter>('needs_reply')
   const [acct, setAcct] = useState<number | 0>(0)
@@ -32,11 +33,16 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
   const [note, setNote] = useState<string | null>(null)
   const [since, setSince] = useState<string>(startOfToday)
   const [view, setView] = useState<{ id: number; mode: ViewMode } | null>(null)
-  const viewing = view ? items.find((i) => i.id === view.id) : undefined
+  const viewing = view ? [...items, ...doneItems].find((i) => i.id === view.id) : undefined
 
   const load = useCallback(async () => {
-    const [m, a] = await Promise.all([window.api.mail.list({}), window.api.accounts.list()])
+    const [m, done, a] = await Promise.all([
+      window.api.mail.list({}),
+      window.api.mail.list({ view: 'done' }),
+      window.api.accounts.list()
+    ])
     setItems(m)
+    setDoneItems(done)
     setAccounts(a)
   }, [])
 
@@ -45,14 +51,43 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
     return window.api.onDataChanged(() => void load())
   }, [load])
 
+  const setFinished = async (id: number, finished: boolean): Promise<void> => {
+    await window.api.mail.setFinished(id, finished)
+    await load()
+  }
+
   const scoped = useMemo(() => (acct ? items.filter((i) => i.accountId === acct) : items), [items, acct])
+  const scopedDone = useMemo(
+    () => (acct ? doneItems.filter((i) => i.accountId === acct) : doneItems),
+    [doneItems, acct]
+  )
   const counts = useMemo(() => {
-    const c = { needs_reply: 0, info: 0, newsletter_junk: 0, all: scoped.length }
+    const c = { needs_reply: 0, info: 0, newsletter_junk: 0, all: scoped.length, done: scopedDone.length }
     for (const i of scoped) if (i.tag) c[i.tag]++
     return c
-  }, [scoped])
-  const shown = filter === 'all' ? scoped : scoped.filter((i) => i.tag === filter)
+  }, [scoped, scopedDone])
+  const shown = filter === 'done' ? scopedDone : filter === 'all' ? scoped : scoped.filter((i) => i.tag === filter)
   const reloginNeeded = accounts.filter((a) => a.status === 'needs_relogin')
+
+  const [unsubscribing, setUnsubscribing] = useState<number | null>(null)
+  const unsubscribe = async (id: number): Promise<void> => {
+    setUnsubscribing(id)
+    setNote(null)
+    const r = await window.api.mail.unsubscribe(id)
+    setUnsubscribing(null)
+    if (r.ok) {
+      const how =
+        r.value.method === 'email'
+          ? `sent an unsubscribe email to ${r.value.target}`
+          : r.value.method === 'one-click'
+            ? 'sent a one-click unsubscribe request'
+            : 'opened the unsubscribe link for you'
+      setNote(`Unsubscribed — ${how}. Marked done.`)
+    } else {
+      setNote(r.error)
+    }
+    await load()
+  }
 
   const [drafting, setDrafting] = useState<number | null>(null)
   const writeDraft = async (id: number): Promise<void> => {
@@ -150,9 +185,9 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
       </div>
 
       <div className="row" style={{ marginBottom: 12 }}>
-        {(['needs_reply', 'info', 'newsletter_junk', 'all'] as Filter[]).map((f) => (
+        {(['needs_reply', 'info', 'newsletter_junk', 'all', 'done'] as Filter[]).map((f) => (
           <button key={f} className={`chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'All' : TAG_LABEL[f]}
+            {f === 'all' ? 'All' : f === 'done' ? 'Done' : TAG_LABEL[f]}
             <span className="n">{counts[f]}</span>
           </button>
         ))}
@@ -173,7 +208,7 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
       ) : (
         <div className="mail-list">
           {shown.map((m) => (
-            <div className="mail" key={m.id}>
+            <div className={`mail ${m.finished ? 'done' : ''}`} key={m.id}>
               <div className="dotcol">
                 <span className="acct-dot" style={{ background: m.color }} title={m.accountLabel} />
               </div>
@@ -190,14 +225,14 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
                 ) : (
                   m.tag && <span className={`tag ${m.tag}`}>{TAG_LABEL[m.tag]}</span>
                 )}
-                {m.answered ? null : m.hasDraft ? (
-                  <button className="link" onClick={() => goTo('drafts')}>
+                {m.finished && <span className="tag answered">Done</span>}
+                {m.answered || m.finished ? null : m.hasDraft ? (
+                  <button className="btn sm" onClick={() => goTo('drafts')}>
                     Draft ready →
                   </button>
                 ) : (
-                  m.tag === 'needs_reply' &&
-                  !m.answered && (
-                    <button className="link" disabled={drafting === m.id} onClick={() => writeDraft(m.id)}>
+                  m.tag === 'needs_reply' && (
+                    <button className="btn sm" disabled={drafting === m.id} onClick={() => writeDraft(m.id)}>
                       {drafting === m.id ? 'Writing draft…' : 'Write draft'}
                     </button>
                   )
@@ -211,13 +246,28 @@ export default function MailPage({ goTo }: { goTo: (p: Page) => void }): React.J
               </div>
               {m.summary && <div className="sum">{m.summary}</div>}
               <div className="actions">
-                <button className="link" onClick={() => setView({ id: m.id, mode: 'message' })}>
+                <button className="btn sm" onClick={() => setView({ id: m.id, mode: 'message' })}>
                   Open email
                 </button>
                 {m.tag === 'needs_reply' && m.webUrl && (
-                  <a className="link" href={m.webUrl} target="_blank" rel="noreferrer">
+                  <a className="btn sm" href={m.webUrl} target="_blank" rel="noreferrer">
                     Open in Gmail ↗
                   </a>
+                )}
+                {m.tag === 'newsletter_junk' && !m.finished && (
+                  <button className="btn sm" disabled={unsubscribing === m.id} onClick={() => void unsubscribe(m.id)}>
+                    {unsubscribing === m.id ? 'Unsubscribing…' : 'Unsubscribe'}
+                  </button>
+                )}
+                {!m.answered && (
+                  <label className="done-check" title="Mark done — no reply needed">
+                    <input
+                      type="checkbox"
+                      checked={m.finished}
+                      onChange={(e) => void setFinished(m.id, e.target.checked)}
+                    />
+                    {m.finished ? 'Done' : 'Mark done'}
+                  </label>
                 )}
               </div>
             </div>

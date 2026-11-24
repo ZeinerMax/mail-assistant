@@ -7,7 +7,7 @@ import { gmailWebUrl } from './mailview'
 
 const LIST_LIMIT = 500
 
-export function buildMailItems(repo: Repo, f: { tag?: Tag; accountId?: number }): MailItem[] {
+export function buildMailItems(repo: Repo, f: { tag?: Tag; accountId?: number; view?: 'active' | 'done' }): MailItem[] {
   const accounts = new Map(repo.listAccounts().map((a) => [a.id, a]))
   return repo.listEmails({ ...f, limit: LIST_LIMIT }).map((e) => {
     const a = accounts.get(e.accountId)
@@ -28,6 +28,7 @@ export function buildMailItems(repo: Repo, f: { tag?: Tag; accountId?: number })
       answered: e.answered,
       threadSize: e.threadSize,
       repliedAt: e.repliedAt,
+      finished: e.finished,
       webUrl: a && a.kind === 'gmail' ? gmailWebUrl(a.email, e.gmailMessageId) : null
     }
   })

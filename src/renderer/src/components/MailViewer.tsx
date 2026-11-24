@@ -93,12 +93,21 @@ export default function MailViewer({
             )
           )}
           {item.webUrl && (
-            <a className="link" href={item.webUrl} target="_blank" rel="noreferrer">
+            <a className="btn sm" href={item.webUrl} target="_blank" rel="noreferrer">
               Open in Gmail ↗
             </a>
           )}
         </div>
         <div className="viewer-body">
+          {reply !== null && !item.repliedAt && (
+            <ReplyBox
+              key={item.id}
+              emailId={item.id}
+              accountId={item.accountId}
+              initialText={reply}
+              onSent={() => setReply(null)}
+            />
+          )}
           {error && <div className="msg err">{error}</div>}
           {!error && !msgs && <div className="note">Loading…</div>}
           {msgs?.map((m) => (
@@ -112,15 +121,6 @@ export default function MailViewer({
               <pre className="viewer-text">{m.text}</pre>
             </article>
           ))}
-          {reply !== null && !item.repliedAt && (
-            <ReplyBox
-              key={item.id}
-              emailId={item.id}
-              accountId={item.accountId}
-              initialText={reply}
-              onSent={() => setReply(null)}
-            />
-          )}
           {mode === 'thread' && msgs && msgs.length <= 1 && (
             <div className="note">This email is not part of a longer conversation.</div>
           )}
