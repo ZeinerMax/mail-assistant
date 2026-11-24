@@ -1,8 +1,8 @@
 # Mail Assistant
 
-A private desktop app (macOS + Windows) that reads up to a few Gmail accounts, summarizes and tags new mail with Claude Haiku, writes reply drafts with Claude Sonnet for mail that needs an answer, lets you **send a reply** from the app, and shows all calendars in one view.
+A private desktop app (macOS + Windows) that reads up to a few Gmail accounts, summarizes and tags new mail with Claude Haiku, writes reply drafts with Claude Sonnet for mail that needs an answer, lets you **send a reply** from the app, mark mail **done**, **unsubscribe** from newsletters in one tap, and shows all calendars in one view.
 
-**It never deletes, moves or labels email and never changes calendar events.** The only thing it writes is a reply that you read, edit and confirm yourself (see [Sending replies](#sending-replies)). There is no "new email from scratch".
+**It never deletes, moves or labels email and never changes calendar events.** The only emails it sends are (a) a reply you read, edit and confirm yourself (see [Sending replies](#sending-replies)), and (b) an unsubscribe request when you press **Unsubscribe** on a newsletter (see [Marking mail done and unsubscribing](#marking-mail-done-and-unsubscribing)). There is no "new email from scratch".
 
 How the app was designed and built (process, decisions, Google Cloud setup, problems solved): see [HOW_IT_WAS_BUILT.md](HOW_IT_WAS_BUILT.md).
 
@@ -23,7 +23,7 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 
 ## Sending replies
 
-- **Reply** button in the email viewer, and an editable reply box on the **Drafts** page (pre-filled with the AI draft). Edits to a draft are kept.
+- **Reply** button in the email viewer; the reply box opens at the **top** of the viewer so it stays visible in a long conversation. Also an editable reply box on the **Drafts** page (pre-filled with the AI draft). Edits to a draft are kept.
 - **Send** asks "Send to X from Y?" first. After sending, the email shows a **Replied** chip.
 - A reply always goes from the account that received the email, to the sender, with the right subject and threading headers. Gmail accounts put it in Sent automatically; for IMAP accounts no copy is saved to the Sent folder.
 - Not included: new email from scratch, syncing drafts to Gmail.
@@ -36,12 +36,24 @@ How the app was designed and built (process, decisions, Google Cloud setup, prob
 - **Open email** shows the whole email; **Whole conversation** shows every message of the thread. Both are fetched live when opened and never stored.
 - Gmail emails that need a reply get **Open in Gmail ↗**, and longer conversations get **Whole conversation (N) ↗**.
 - Before writing a draft, the app checks the conversation. If you already replied (a later message sent by you, or the IMAP `\Answered` flag), no draft is written and the email shows **Important — already answered**.
+- The tag for mail that needs an answer is shown as **Important**.
+
+## Marking mail done and unsubscribing
+
+- **Mark done:** every email has a **Mark done** checkbox — for mail that needs no reply but you want cleared. Done mail (and mail you already answered) leaves the active list; the **Done** filter shows it again and you can un-check to bring it back. This is only in the app — nothing is changed, archived or deleted in your mailbox.
+- **Check now** reloads the active list, so done and already-answered mail stay out of the way.
+- **Unsubscribe** (on *Newsletter / junk* mail): one tap, fully automatic, with no browser window opened:
+  1. If the newsletter offers **one-click** unsubscribe (RFC 8058 `List-Unsubscribe-Post`), the app sends that one-click request.
+  2. Otherwise, if it offers only a **mailto** unsubscribe, the app **sends a short unsubscribe email** from the account that received it.
+  3. Otherwise it quietly contacts the unsubscribe **link** in the background.
+  4. If there is no `List-Unsubscribe` header at all, Claude Haiku reads the email body to find the unsubscribe link, which the app then contacts.
+  On success the email is marked done. Because this sends a request (and sometimes an email) on your behalf, it only happens when you press **Unsubscribe**.
 
 ## Privacy and security
 
 - **What is stored on disk (SQLite):** account address + colour, message/thread IDs, sender name and address, subject, date, the AI summary and tag, drafts, run history and token usage.
 - **Never stored:** email bodies, quoted text, attachments, thread text. Full text exists only in memory during a check and is discarded after the model call.
-- **Sent to Anthropic:** only new emails, with quoted reply chains, signatures and attachments removed and long bodies cut to a limit (Settings). For a draft, the cleaned thread (newest messages first, up to a limit).
+- **Sent to Anthropic:** only new emails, with quoted reply chains, signatures and attachments removed and long bodies cut to a limit (Settings). For a draft, the cleaned thread (newest messages first, up to a limit). When you unsubscribe from a newsletter that has no `List-Unsubscribe` header, its cleaned body is sent to Haiku once to locate the unsubscribe link.
 - **Prompt injection:** every email is wrapped in a tag with a random per-request name, the model is told to ignore any instructions inside, the models get **no tools**, and summaries are forced into a fixed JSON shape.
 - **Secrets:** the Anthropic API key and Google sign-ins are encrypted with the operating system (Windows DPAPI / macOS Keychain) via Electron `safeStorage`. There is no plain-text fallback. They never reach the UI, logs or the database.
 - **Logs** (`…/Mail Assistant/logs/app.log`) contain only IDs, counts and error types — never text, addresses or keys.
@@ -129,7 +141,7 @@ Windows: SmartScreen may say *"Windows protected your PC"* → **More info → R
 ## How it works
 
 - Every *N* minutes (default 15, Settings) and on **Check now**: for each account, Gmail's history API lists new inbox messages since the last check (first check: last 24 hours). Promotions/Social tab mail is tagged *Newsletter / junk* without AI (switchable). Each other email is cleaned and sent to Haiku → summary + tag.
-- Each *Needs reply* email from that check gets a Sonnet draft built from the cleaned thread. One OS notification per check ("2 new drafts ready") + a badge on **Drafts**. Emails without a draft show **Write draft**.
+- Each *Important* (needs-reply) email from that check gets a Sonnet draft built from the cleaned thread. One OS notification per check ("2 new drafts ready") + a badge on **Drafts**. Emails without a draft show **Write draft**.
 - The **status bar** shows e.g. *"Home: reading email 14 of 40, about 1 min left"* (estimate from the average of the last 10 emails), *"Offline — will try again at 10:57"*, or *"Check your API key in Settings"*.
 - If a Google sign-in stops working, the account shows **Sign in again** (Accounts page, banner on Mail and Calendar) and the other accounts keep working.
 
@@ -138,7 +150,8 @@ Windows: SmartScreen may say *"Windows protected your PC"* → **More info → R
 ```
 src/main/      config, secrets (safeStorage), log, db/ (schema, repo), google/ (oauth, accounts, gmail, calendar, clean),
                imap/ (accounts, client, source), send/ (compose, mime, gmail-send, smtp, service),
-               ai/ (client, prompts, triage, draft, usage), jobs/ (scan, scheduler, status), update/, notify, views, ipc-handlers, index
+               unsubscribe/ (parse, find, service), ai/ (client, prompts, triage, draft, usage),
+               jobs/ (scan, scheduler, status), update/, notify, views, ipc-handlers, index
 src/preload/   narrow typed bridge (window.api)
 src/renderer/  React UI: Mail, Drafts, Calendar, Accounts, Settings, StatusBar
 src/shared/    types, IPC contract, status text formatting

@@ -118,6 +118,7 @@ A requirement was to not invent API names. In practice:
 ## 8. Status and next steps
 
 - ✅ App, tests, Windows installer, CI workflow, documentation.
+- ✅ Later releases (through v0.2.3): one-click in-app updates; sending a reply you confirm (Gmail `gmail.send` / IMAP SMTP); marking mail done with a Done filter (in-app only); and automatic newsletter unsubscribe (RFC 8058 one-click, mailto, or background link, with Haiku finding the link when there is no header). The read-only guard test still enforces no Gmail/Calendar/IMAP writes; all outgoing mail stays in `send/`.
 - ⏳ First real end-to-end run with real Gmail accounts and an Anthropic API key.
 - ⏳ Install and test the macOS build on a real Mac (ad-hoc signed, not notarized — no paid Apple certificate).
 - ⏳ Decide on publishing the Google app to production so sign-ins don't expire weekly.
