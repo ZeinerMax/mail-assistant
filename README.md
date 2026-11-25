@@ -2,6 +2,8 @@
 
 A private desktop app (macOS + Windows) that reads up to a few Gmail accounts, summarizes and tags new mail with Claude Haiku, writes reply drafts with Claude Sonnet for mail that needs an answer, lets you **send a reply** from the app, mark mail **done**, **unsubscribe** from newsletters in one tap, and shows all calendars in one view.
 
+_Current version: **0.2.3** — mail that needs an answer is shown as **Important**, a **Mark done** checkbox and **Done** filter clear handled mail, and newsletters have one-tap **Unsubscribe**._
+
 **It never deletes, moves or labels email and never changes calendar events.** The only emails it sends are (a) a reply you read, edit and confirm yourself (see [Sending replies](#sending-replies)), and (b) an unsubscribe request when you press **Unsubscribe** on a newsletter (see [Marking mail done and unsubscribing](#marking-mail-done-and-unsubscribing)). There is no "new email from scratch".
 
 How the app was designed and built (process, decisions, Google Cloud setup, problems solved): see [HOW_IT_WAS_BUILT.md](HOW_IT_WAS_BUILT.md).
